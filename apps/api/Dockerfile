@@ -58,9 +58,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/node_modules ./node_modules
-COPY --from=builder /app/apps/api/package.json ./package.json
+# Why copy the ENTIRE builder /app directory instead of cherry-picking
+# apps/api/dist + apps/api/node_modules (the original approach)?
+#
+# This is an npm workspaces monorepo. `npm ci` run at the repo root
+# HOISTS most shared dependencies (express, mongoose, nearly everything)
+# up to the root-level /app/node_modules - it does NOT put them in
+# apps/api/node_modules. The original version of this Dockerfile only
+# copied apps/api/node_modules into the runtime image, which was missing
+# almost every dependency and failed at startup with "Cannot find module
+# 'express'" - a real bug, caught only once this was actually deployed,
+# since Docker wasn't available to test this multi-stage build during
+# local development. Copying the whole /app directory preserves the
+# exact relative structure (root node_modules alongside apps/api/) that
+# Node's own module resolution algorithm expects - it walks UP parent
+# directories looking for node_modules, so running from
+# /app/apps/api/dist/server.js correctly finds hoisted packages in
+# /app/node_modules the same way it did during the build. The trade-off:
+# this also includes devDependencies and TypeScript source in the
+# runtime image, a real image-size cost worth optimizing later (a
+# proper `npm ci --omit=dev` production-only install stage) - but
+# correctness came first, verified by an actual deployment, before that
+# optimization was worth the added complexity and risk of a second
+# untested change.
+COPY --from=builder /app /app
 
 ENV NODE_ENV=production
 EXPOSE 4000
@@ -78,4 +99,4 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4000/health/live', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "apps/api/dist/server.js"]
