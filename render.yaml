@@ -1,0 +1,72 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+#
+# Deploy: connect this repo in the Render Dashboard and choose
+# "Deploy Blueprint" - Render detects this file automatically. Any
+# envVar below marked `sync: false` needs a real value entered manually
+# in the Render Dashboard after the Blueprint creates the service -
+# these are secrets/environment-specific values that deliberately never
+# get committed to source control, even as placeholders.
+services:
+  - type: web
+    name: ai-codebase-assistant-api
+    runtime: docker
+    # This project is an npm workspaces monorepo - the Dockerfile lives
+    # under apps/api/, but its build steps (COPY package.json,
+    # package-lock.json, etc.) expect the REPO ROOT as build context, not
+    # the apps/api/ directory itself, to resolve the full workspace
+    # dependency tree correctly.
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: free
+    # Render's own health-check docs explicitly recommend checking
+    # operation-critical dependencies (their example: "executing a
+    # simple database query to confirm connectivity") - unlike a bare
+    # Kubernetes liveness probe, Render's healthCheckPath serves BOTH
+    # zero-downtime-deploy cutover AND ongoing failure detection for a
+    # running instance, with its own built-in grace periods (15s before
+    # pausing traffic to a failing instance, 60s before restarting it).
+    # /health/ready is the right choice here, trusting those grace
+    # periods to already absorb a momentary Mongo blip rather than
+    # second-guessing Render's own platform design by using the
+    # liveness-only endpoint instead.
+    healthCheckPath: /health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: MONGODB_URI
+        sync: false # your MongoDB Atlas connection string
+      - key: JWT_SECRET
+        generateValue: true # Render generates a secure random value - no need to create one yourself
+      - key: JWT_ACCESS_TOKEN_TTL
+        value: 15m
+      - key: JWT_REFRESH_TOKEN_TTL
+        value: 7d
+      - key: BCRYPT_SALT_ROUNDS
+        value: '12'
+      - key: LOCAL_EMBEDDING_MODEL
+        value: onnx-community/all-MiniLM-L6-v2-ONNX
+      - key: GROQ_API_KEY
+        sync: false # free key from console.groq.com
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GROQ_MAX_TOKENS
+        value: '1024'
+      - key: CHAT_RETRIEVAL_TOP_K
+        value: '8'
+      - key: RATE_LIMIT_AUTH_MAX
+        value: '5'
+      - key: RATE_LIMIT_IMPORT_MAX
+        value: '10'
+      - key: RATE_LIMIT_CHAT_MAX
+        value: '30'
+      - key: ALLOWED_ORIGINS
+        sync: false # set to your real frontend origin(s) once one exists; comma-separated for more than one
+      - key: MAX_REPO_FILES
+        value: '3000'
+      - key: MAX_FILE_SIZE_KB
+        value: '500'
+      - key: GITHUB_TOKEN
+        sync: false # optional but recommended - raises the GitHub API rate limit from 60/hr to 5000/hr

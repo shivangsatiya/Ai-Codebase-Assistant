@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      # Generated against apps/api/.env.example - if you add a new env
+      # var to the schema, add it here too. (This file drifting stale
+      # relative to the real env schema is exactly what happened between
+      # Day 1 and Milestone 1.5 - it's called out here deliberately so
+      # the next addition doesn't repeat that.)
+      NODE_ENV: development
+      PORT: 4000
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-15m}
+      JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL:-7d}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
+      LOCAL_EMBEDDING_MODEL: ${LOCAL_EMBEDDING_MODEL:-onnx-community/all-MiniLM-L6-v2-ONNX}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_MAX_TOKENS: ${GROQ_MAX_TOKENS:-1024}
+      CHAT_RETRIEVAL_TOP_K: ${CHAT_RETRIEVAL_TOP_K:-8}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-5}
+      RATE_LIMIT_IMPORT_MAX: ${RATE_LIMIT_IMPORT_MAX:-10}
+      RATE_LIMIT_CHAT_MAX: ${RATE_LIMIT_CHAT_MAX:-30}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      MAX_REPO_FILES: ${MAX_REPO_FILES:-3000}
+      MAX_FILE_SIZE_KB: ${MAX_FILE_SIZE_KB:-500}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    # No local `mongo` service here on purpose — MongoDB Atlas's free
+    # tier already provides the cluster with Vector Search enabled, and
+    # running a second local Mongo would just be a second thing to keep
+    # in sync with production. MONGODB_URI points at Atlas even in dev.
