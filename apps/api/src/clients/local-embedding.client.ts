@@ -52,7 +52,7 @@ export type FeatureExtractor = (
  */
 const DEFAULT_MODEL = 'onnx-community/all-MiniLM-L6-v2-ONNX';
 const DEFAULT_BATCH_SIZE = 32;
-const DEFAULT_DTYPE = 'q8';
+const DEFAULT_DTYPE = 'q4f16';
 
 export class LocalEmbeddingClient implements IEmbeddingProvider {
   private readonly modelName: string;
@@ -125,3 +125,4 @@ export class LocalEmbeddingClient implements IEmbeddingProvider {
     return allEmbeddings;
   }
 }
+
