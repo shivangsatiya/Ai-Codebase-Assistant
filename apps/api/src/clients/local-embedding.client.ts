@@ -11,9 +11,6 @@ export type FeatureExtractor = (
   options: { pooling: 'mean'; normalize: boolean },
 ) => Promise<EmbeddingTensor>;
 
-const DEFAULT_MODEL = 'onnx-community/all-MiniLM-L6-v2-ONNX';
-const DEFAULT_BATCH_SIZE = 32;
-
 /**
  * Why run embeddings locally instead of calling a third-party API?
  *
@@ -34,11 +31,29 @@ const DEFAULT_BATCH_SIZE = 32;
  * Why all-MiniLM-L6-v2 specifically?
  *
  * It's one of the most widely used, well-tested sentence embedding
- * models with transformers.js - small (~90MB), fast on CPU, and its
- * ONNX export is maintained specifically for this library, which matters
- * after already being burned once by an ONNX/runtime version mismatch
- * (the tree-sitter-wasms situation from Day 3-4).
+ * models with transformers.js - small (~90MB at full precision), fast on
+ * CPU, and its ONNX export is maintained specifically for this library,
+ * which matters after already being burned once by an ONNX/runtime
+ * version mismatch (the tree-sitter-wasms situation from Day 3-4).
+ *
+ * Why dtype: 'q8' (8-bit quantization) specifically?
+ *
+ * The first real deployment to Render's free tier crashed with a
+ * confirmed OOM kill ("Ran out of memory (used over 512MB)") while
+ * loading this exact model - without an explicit dtype, the library
+ * loads the full fp32-precision weights, using roughly 4x the memory of
+ * an 8-bit quantized version for the same model. Quantization has a
+ * well-established, minimal quality impact specifically for sentence
+ * embedding models (a few percent at most in standard retrieval
+ * benchmarks) - a fully justified trade-off here, both for fitting
+ * inside a constrained memory budget and because this project already
+ * accepted "general-purpose, not code-specific" as a quality trade-off
+ * for local embeddings in the first place.
  */
+const DEFAULT_MODEL = 'onnx-community/all-MiniLM-L6-v2-ONNX';
+const DEFAULT_BATCH_SIZE = 32;
+const DEFAULT_DTYPE = 'q8';
+
 export class LocalEmbeddingClient implements IEmbeddingProvider {
   private readonly modelName: string;
   private readonly batchSize: number;
@@ -51,9 +66,9 @@ export class LocalEmbeddingClient implements IEmbeddingProvider {
     /**
      * Injected for tests - a fake extractor lets tests verify our own
      * batching and tensor-to-array mapping logic without ever
-     * downloading the real ~90MB model or running actual inference.
+     * downloading the real model or running actual inference.
      * Production wiring (the composition root) uses the default, which
-     * lazily loads the real model on first use.
+     * lazily loads the real, quantized model on first use.
      */
     extractorFactory?: () => Promise<FeatureExtractor>,
   ) {
@@ -61,7 +76,10 @@ export class LocalEmbeddingClient implements IEmbeddingProvider {
     this.batchSize = batchSize;
     this.extractorFactory =
       extractorFactory ??
-      (() => pipeline('feature-extraction', this.modelName) as unknown as Promise<FeatureExtractor>);
+      (() =>
+        pipeline('feature-extraction', this.modelName, {
+          dtype: DEFAULT_DTYPE,
+        }) as unknown as Promise<FeatureExtractor>);
   }
 
   /**
