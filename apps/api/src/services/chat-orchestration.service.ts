@@ -1,8 +1,10 @@
+import { performance } from 'perf_hooks';
 import type { IChatRepository, IMessageRepository } from '../repositories/chat.repository';
 import type { IRetrievalService } from './retrieval.service';
 import type { IChatCompletionProvider, ChatMessage } from '../clients/chat-completion-provider';
 import { buildSystemPrompt, extractCitations } from './chat-prompt';
 import { NotFoundError } from '../utils/errors';
+import { logger } from '../utils/logger';
 
 export class ChatOrchestrationService {
   constructor(
@@ -27,8 +29,21 @@ export class ChatOrchestrationService {
    * point of streaming. The generator IS the streaming contract; the
    * route just needs to `for await` over it and write each chunk to the
    * response.
+   *
+   * Why one more summary log line here, when RetrievalService and
+   * GroqChatClient already each log their own timing?
+   *
+   * Each of those answers "how long did THIS piece take" in isolation -
+   * useful on its own, but neither one alone answers "how long did this
+   * whole chat turn take, end to end, and how much of that was retrieval
+   * versus generation." This line is what actually answers that,
+   * matching the same pattern established for the import pipeline in
+   * Task 1: individual stage logs for reading live, one summary line for
+   * answering the roadmap's stated question directly.
    */
   async *streamAnswer(chatId: string, repositoryId: string, question: string): AsyncGenerator<string, void, unknown> {
+    const startedAt = performance.now();
+
     const chat = await this.chatRepo.findById(chatId);
     if (!chat) {
       throw new NotFoundError('Chat not found');
@@ -36,7 +51,10 @@ export class ChatOrchestrationService {
 
     await this.messageRepo.create({ chatId, role: 'user', content: question });
 
+    const retrievalStartedAt = performance.now();
     const retrievedChunks = await this.retrievalService.retrieve(repositoryId, question);
+    const retrievalMs = Math.round(performance.now() - retrievalStartedAt);
+
     const systemPrompt = buildSystemPrompt(retrievedChunks);
 
     const history = await this.messageRepo.findByChatId(chatId);
@@ -50,5 +68,18 @@ export class ChatOrchestrationService {
 
     const citations = extractCitations(fullText);
     await this.messageRepo.create({ chatId, role: 'assistant', content: fullText, citations });
+
+    const durationMs = Math.round(performance.now() - startedAt);
+    logger.info(
+      {
+        chatId,
+        repositoryId,
+        retrievedChunkCount: retrievedChunks.length,
+        citationCount: citations.length,
+        durationMs,
+        stages: { retrievalMs },
+      },
+      'Chat response complete',
+    );
   }
 }

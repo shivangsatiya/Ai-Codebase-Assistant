@@ -7,6 +7,20 @@ export interface GitHubRepoInfo {
   cloneUrl: string;
 }
 
+/**
+ * Extracted so RepositoryImportService can depend on this interface
+ * rather than the concrete GitHubClient class - the same pattern used
+ * throughout this project (IEmbeddingProvider, IChunkRepository, etc.)
+ * for exactly the same reason: it lets tests inject a fake that never
+ * makes a real network call, without which RepositoryImportService
+ * (the most complex orchestration class in the codebase) had no unit
+ * test coverage at all.
+ */
+export interface IGitHubClient {
+  parseRepoUrl(url: string): { owner: string; repo: string };
+  fetchRepoInfo(url: string): Promise<GitHubRepoInfo>;
+}
+
 const GITHUB_URL_PATTERN = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(\.git)?\/?$/;
 
 /**
@@ -19,7 +33,7 @@ const GITHUB_URL_PATTERN = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(\.git)
  * repo support is a Milestone 2 feature requiring GitHub App auth) rather
  * than failing deep inside the clone with a confusing git auth error.
  */
-export class GitHubClient {
+export class GitHubClient implements IGitHubClient {
   constructor(private readonly githubToken?: string) {}
 
   parseRepoUrl(url: string): { owner: string; repo: string } {

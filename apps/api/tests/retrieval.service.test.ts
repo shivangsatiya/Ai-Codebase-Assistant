@@ -1,6 +1,7 @@
 import { RetrievalService } from '../src/services/retrieval.service';
 import type { IEmbeddingProvider, EmbeddingInputType } from '../src/clients/embedding-provider';
 import type { IChunkRepository, ChunkToInsert, InsertResult, ChunkSearchResult } from '../src/repositories/chunk.repository';
+import { logger } from '../src/utils/logger';
 
 class FakeEmbeddingProvider implements IEmbeddingProvider {
   public lastInputType: EmbeddingInputType | null = null;
@@ -89,5 +90,58 @@ describe('RetrievalService', () => {
 
     expect(result).toEqual([]);
     expect(chunkRepo.lastCall).toBeNull();
+  });
+});
+
+describe('RetrievalService — observability', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('logs "Retrieval complete" with chunk count, top score, and a stage timing breakdown', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    const chunks: ChunkSearchResult[] = [
+      { filePath: 'a.ts', startLine: 1, endLine: 2, content: 'x', chunkType: 'function', language: 'TypeScript', score: 0.72 },
+      { filePath: 'b.ts', startLine: 1, endLine: 2, content: 'y', chunkType: 'function', language: 'TypeScript', score: 0.91 },
+    ];
+    const service = new RetrievalService(new FakeEmbeddingProvider([[0.1, 0.2]]), new FakeChunkRepository(chunks), 8);
+
+    await service.retrieve('repo-1', 'a question');
+
+    const call = infoSpy.mock.calls.find((c) => c[1] === 'Retrieval complete');
+    expect(call).toBeDefined();
+    const payload = call![0] as Record<string, unknown>;
+    expect(payload.chunksRetrieved).toBe(2);
+    // The highest of the two scores above (0.91), not the first/last -
+    // this is what would catch a bug like accidentally using
+    // results[0].score instead of an actual max.
+    expect(payload.topScore).toBe(0.91);
+    expect(payload).toHaveProperty('durationMs');
+    expect(payload.stages).toEqual(
+      expect.objectContaining({ embedMs: expect.any(Number), vectorSearchMs: expect.any(Number) }),
+    );
+  });
+
+  it('logs chunksRetrieved: 0 and a null-safe result when no query embedding is produced', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    const service = new RetrievalService(new FakeEmbeddingProvider(null), new FakeChunkRepository([]), 8);
+
+    await service.retrieve('repo-1', 'a question');
+
+    const call = infoSpy.mock.calls.find((c) => c[1] === 'Retrieval complete');
+    expect(call).toBeDefined();
+    const payload = call![0] as Record<string, unknown>;
+    expect(payload.chunksRetrieved).toBe(0);
+  });
+
+  it('logs topScore: null when no chunks are retrieved (not -Infinity, which is what Math.max() with no arguments silently returns)', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    const service = new RetrievalService(new FakeEmbeddingProvider([[0.1]]), new FakeChunkRepository([]), 8);
+
+    await service.retrieve('repo-1', 'a question');
+
+    const call = infoSpy.mock.calls.find((c) => c[1] === 'Retrieval complete');
+    const payload = call![0] as Record<string, unknown>;
+    expect(payload.topScore).toBeNull();
   });
 });

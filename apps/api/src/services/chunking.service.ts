@@ -42,7 +42,16 @@ function hashContent(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
-export class ChunkingService {
+/**
+ * Same reasoning as IGitHubClient/IGitClonerClient - lets
+ * RepositoryImportService be tested against a fake that never invokes
+ * the real tree-sitter WASM parser.
+ */
+export interface IChunkingService {
+  chunkFile(filePath: string, content: string, extension: string): Promise<EnrichedChunk[]>;
+}
+
+export class ChunkingService implements IChunkingService {
   /**
    * Chunk a single file's content. Tries AST-based chunking first for
    * configured languages; falls back to line-window chunking whenever

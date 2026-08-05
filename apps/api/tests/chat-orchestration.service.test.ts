@@ -6,6 +6,7 @@ import type { ChatDocument } from '../src/models/chat.model';
 import type { MessageDocument } from '../src/models/message.model';
 import type { ChunkSearchResult } from '../src/repositories/chunk.repository';
 import { NotFoundError } from '../src/utils/errors';
+import { logger } from '../src/utils/logger';
 
 function makeChatDoc(id: string, repositoryId: string, userId: string): ChatDocument {
   return {
@@ -211,5 +212,62 @@ describe('ChatOrchestrationService', () => {
       'first answer',
       'second question',
     ]);
+  });
+});
+
+describe('ChatOrchestrationService — observability', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('logs "Chat response complete" with retrieved chunk count, citation count, and a stage timing breakdown', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    const chatRepo = new FakeChatRepository();
+    chatRepo.seed(makeChatDoc('chat-1', 'repo-1', 'user-1'));
+
+    const chunk: ChunkSearchResult = {
+      filePath: 'a.ts',
+      startLine: 1,
+      endLine: 2,
+      content: 'x',
+      chunkType: 'function',
+      language: 'TypeScript',
+      score: 0.9,
+    };
+
+    const service = new ChatOrchestrationService(
+      chatRepo,
+      new FakeMessageRepository(),
+      new FakeRetrievalService([chunk]),
+      new FakeChatCompletionProvider(['Answer with a citation ', '[a.ts:1-2]', '.']),
+    );
+
+    for await (const _token of service.streamAnswer('chat-1', 'repo-1', 'a question')) {
+      void _token;
+    }
+
+    const call = infoSpy.mock.calls.find((c) => c[1] === 'Chat response complete');
+    expect(call).toBeDefined();
+    const payload = call![0] as Record<string, unknown>;
+    expect(payload.retrievedChunkCount).toBe(1);
+    expect(payload.citationCount).toBe(1);
+    expect(payload).toHaveProperty('durationMs');
+    expect(payload.stages).toEqual(expect.objectContaining({ retrievalMs: expect.any(Number) }));
+  });
+
+  it('does not log "Chat response complete" when the chat is not found (fails before any timing would be meaningful)', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    const service = new ChatOrchestrationService(
+      new FakeChatRepository(),
+      new FakeMessageRepository(),
+      new FakeRetrievalService([]),
+      new FakeChatCompletionProvider([]),
+    );
+
+    const generator = service.streamAnswer('nonexistent-chat', 'repo-1', 'a question');
+    await expect(generator.next()).rejects.toThrow();
+
+    const call = infoSpy.mock.calls.find((c) => c[1] === 'Chat response complete');
+    expect(call).toBeUndefined();
   });
 });

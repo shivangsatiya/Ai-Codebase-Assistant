@@ -11,6 +11,15 @@ export interface ClonedRepo {
 }
 
 /**
+ * Same reasoning as IGitHubClient - lets RepositoryImportService be
+ * tested against a fake that never shells out to a real git binary or
+ * touches the real filesystem.
+ */
+export interface IGitClonerClient {
+  clone(cloneUrl: string, branch: string): Promise<ClonedRepo>;
+}
+
+/**
  * Why clone into a fresh os.tmpdir() subdirectory per job, and always
  * shallow (--depth 1, single branch)?
  *
@@ -21,7 +30,7 @@ export interface ClonedRepo {
  * `finally` block by the caller so a crash mid-parse doesn't leave
  * cloned source code sitting on disk indefinitely.
  */
-export class GitClonerClient {
+export class GitClonerClient implements IGitClonerClient {
   async clone(cloneUrl: string, branch: string): Promise<ClonedRepo> {
     const localPath = await mkdtemp(join(tmpdir(), 'aca-clone-'));
 

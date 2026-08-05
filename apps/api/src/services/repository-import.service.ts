@@ -1,11 +1,12 @@
 import { readFile } from 'fs/promises';
 import { extname } from 'path';
+import { performance } from 'perf_hooks';
 import type { IRepositoryRepository, IJobRepository } from '../repositories/repository.repository';
 import type { IChunkRepository, ChunkToInsert } from '../repositories/chunk.repository';
-import type { GitHubClient } from '../clients/github.client';
-import type { GitClonerClient } from '../clients/git-cloner.client';
+import type { IGitHubClient } from '../clients/github.client';
+import type { IGitClonerClient, ClonedRepo } from '../clients/git-cloner.client';
 import type { IEmbeddingProvider } from '../clients/embedding-provider';
-import type { ChunkingService } from './chunking.service';
+import type { IChunkingService } from './chunking.service';
 import { walkRepoFiles } from '../utils/repo-file-walker';
 import { logger } from '../utils/logger';
 import type { RepositoryDocument } from '../models/repository.model';
@@ -33,9 +34,9 @@ export class RepositoryImportService {
   constructor(
     private readonly repositoryRepo: IRepositoryRepository,
     private readonly jobRepo: IJobRepository,
-    private readonly githubClient: GitHubClient,
-    private readonly gitCloner: GitClonerClient,
-    private readonly chunkingService: ChunkingService,
+    private readonly githubClient: IGitHubClient,
+    private readonly gitCloner: IGitClonerClient,
+    private readonly chunkingService: IChunkingService,
     private readonly embeddingProvider: IEmbeddingProvider,
     private readonly chunkRepo: IChunkRepository,
     private readonly maxRepoFiles: number,
@@ -76,16 +77,21 @@ export class RepositoryImportService {
     cloneUrl: string,
     branch: string,
   ): Promise<void> {
+    const importStartedAt = performance.now();
+
     await this.repositoryRepo.updateStatus(repositoryId, 'cloning');
     await this.jobRepo.updateStage(jobId, 'cloning', 5);
 
-    let cloned: Awaited<ReturnType<GitClonerClient['clone']>>;
+    const cloneStartedAt = performance.now();
+    let cloned: ClonedRepo;
     try {
       cloned = await this.gitCloner.clone(cloneUrl, branch);
     } catch (err) {
       await this.failImport(repositoryId, jobId, err, 'Clone failed');
       return;
     }
+    const cloneDurationMs = Math.round(performance.now() - cloneStartedAt);
+    logger.info({ repositoryId, durationMs: cloneDurationMs }, 'Clone complete');
 
     try {
       await this.repositoryRepo.updateStatus(repositoryId, 'parsing', {
@@ -94,9 +100,12 @@ export class RepositoryImportService {
       });
       await this.jobRepo.updateStage(jobId, 'parsing', 20);
 
+      const walkStartedAt = performance.now();
       const files = await walkRepoFiles(cloned.localPath, this.maxRepoFiles, this.maxFileSizeBytes * 1024);
-      logger.info({ repositoryId, fileCount: files.length }, 'File walk complete');
+      const walkDurationMs = Math.round(performance.now() - walkStartedAt);
+      logger.info({ repositoryId, fileCount: files.length, durationMs: walkDurationMs }, 'File walk complete');
 
+      const chunkStartedAt = performance.now();
       const allChunks: Array<{
         filePath: string;
         startLine: number;
@@ -123,11 +132,16 @@ export class RepositoryImportService {
         allChunks.push(...enriched);
       }
 
-      logger.info({ repositoryId, chunkCount: allChunks.length }, 'Chunking complete');
+      const chunkDurationMs = Math.round(performance.now() - chunkStartedAt);
+      logger.info(
+        { repositoryId, chunkCount: allChunks.length, durationMs: chunkDurationMs },
+        'Chunking complete',
+      );
 
       await this.repositoryRepo.updateStatus(repositoryId, 'embedding');
       await this.jobRepo.updateStage(jobId, 'embedding', 60);
 
+      const embedStartedAt = performance.now();
       const embeddings =
         allChunks.length > 0
           ? await this.embeddingProvider.embedBatch(
@@ -135,6 +149,11 @@ export class RepositoryImportService {
               'document',
             )
           : [];
+      const embedDurationMs = Math.round(performance.now() - embedStartedAt);
+      logger.info(
+        { repositoryId, embeddingCount: embeddings.length, durationMs: embedDurationMs },
+        'Embedding complete',
+      );
 
       const chunksToInsert: ChunkToInsert[] = allChunks.map((chunk, i) => ({
         repositoryId,
@@ -150,11 +169,45 @@ export class RepositoryImportService {
         contentHash: chunk.contentHash,
       }));
 
+      const storeStartedAt = performance.now();
       const insertResult = await this.chunkRepo.insertManyIdempotent(chunksToInsert);
-      logger.info({ repositoryId, ...insertResult }, 'Chunks stored');
+      const storeDurationMs = Math.round(performance.now() - storeStartedAt);
+      logger.info({ repositoryId, ...insertResult, durationMs: storeDurationMs }, 'Chunks stored');
 
       await this.repositoryRepo.updateStatus(repositoryId, 'ready', { fileCount: files.length });
       await this.jobRepo.updateStage(jobId, 'complete', 100);
+
+      /**
+       * Why a single summary line with every stage's duration, in
+       * addition to each stage already logging its own duration
+       * individually above?
+       *
+       * Each stage's own log line answers "how long did THIS step
+       * take," useful when reading logs live as an import runs. This
+       * summary line is what actually answers the roadmap's stated
+       * goal directly - "how long does indexing take, which stage is
+       * the bottleneck" - in one place, without needing to manually
+       * find and add up five separate log lines scattered through the
+       * output. Both are genuinely useful for different reading
+       * patterns, not redundant with each other.
+       */
+      const totalDurationMs = Math.round(performance.now() - importStartedAt);
+      logger.info(
+        {
+          repositoryId,
+          fileCount: files.length,
+          chunkCount: allChunks.length,
+          durationMs: totalDurationMs,
+          stages: {
+            cloneMs: cloneDurationMs,
+            walkMs: walkDurationMs,
+            chunkMs: chunkDurationMs,
+            embedMs: embedDurationMs,
+            storeMs: storeDurationMs,
+          },
+        },
+        'Import complete',
+      );
     } catch (err) {
       await this.failImport(repositoryId, jobId, err, 'Parsing/embedding failed');
     } finally {
