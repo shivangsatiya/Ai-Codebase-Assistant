@@ -10,17 +10,20 @@ export interface CreateRepositoryInput {
 export interface IRepositoryRepository {
   create(input: CreateRepositoryInput): Promise<RepositoryDocument>;
   findById(id: string): Promise<RepositoryDocument | null>;
+  findByOwnerId(ownerId: string): Promise<RepositoryDocument[]>;
   updateStatus(
     id: string,
     status: RepositoryStatus,
     extra?: Partial<Pick<RepositoryDocument, 'fileCount' | 'defaultBranch' | 'commitSha' | 'errorMessage'>>,
   ): Promise<void>;
+  deleteById(id: string): Promise<void>;
 }
 
 export interface IJobRepository {
   createForRepository(repositoryId: string): Promise<JobDocument>;
   findByRepositoryId(repositoryId: string): Promise<JobDocument | null>;
   updateStage(id: string, stage: JobStage, progress: number, error?: string): Promise<void>;
+  deleteByRepositoryId(repositoryId: string): Promise<void>;
 }
 
 export class MongoRepositoryRepository implements IRepositoryRepository {
@@ -37,12 +40,26 @@ export class MongoRepositoryRepository implements IRepositoryRepository {
     return RepositoryModel.findById(id).exec();
   }
 
+  /**
+   * Sorted newest-first - the most natural default for "list my
+   * repositories" with no pagination yet (a reasonable omission at
+   * portfolio scale; a natural addition if this list ever grew large
+   * enough to need it, not something this task's scope requires today).
+   */
+  async findByOwnerId(ownerId: string): Promise<RepositoryDocument[]> {
+    return RepositoryModel.find({ ownerId }).sort({ createdAt: -1 }).exec();
+  }
+
   async updateStatus(
     id: string,
     status: RepositoryStatus,
     extra?: Partial<Pick<RepositoryDocument, 'fileCount' | 'defaultBranch' | 'commitSha' | 'errorMessage'>>,
   ): Promise<void> {
     await RepositoryModel.findByIdAndUpdate(id, { status, ...extra }).exec();
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await RepositoryModel.deleteOne({ _id: id }).exec();
   }
 }
 
@@ -57,5 +74,9 @@ export class MongoJobRepository implements IJobRepository {
 
   async updateStage(id: string, stage: JobStage, progress: number, error?: string): Promise<void> {
     await JobModel.findByIdAndUpdate(id, { stage, progress, error, updatedAt: new Date() }).exec();
+  }
+
+  async deleteByRepositoryId(repositoryId: string): Promise<void> {
+    await JobModel.deleteMany({ repositoryId }).exec();
   }
 }

@@ -40,6 +40,14 @@ class FakeRepositoryRepository implements IRepositoryRepository {
   async updateStatus(id: string, status: RepositoryStatus): Promise<void> {
     this.statusUpdates.push({ id, status });
   }
+
+  async findByOwnerId(_ownerId: string): Promise<RepositoryDocument[]> {
+    return [];
+  }
+
+  async deleteById(_id: string): Promise<void> {
+    // no-op - not exercised by these tests
+  }
 }
 
 class FakeJobRepository implements IJobRepository {
@@ -55,6 +63,10 @@ class FakeJobRepository implements IJobRepository {
 
   async updateStage(_id: string, stage: JobStage, progress: number): Promise<void> {
     this.stageUpdates.push({ stage, progress });
+  }
+
+  async deleteByRepositoryId(_repositoryId: string): Promise<void> {
+    // no-op - not exercised by these tests
   }
 }
 
@@ -152,6 +164,10 @@ class FakeChunkRepository implements IChunkRepository {
 
   async vectorSearch(_repositoryId: string, _queryVector: number[], _limit: number): Promise<ChunkSearchResult[]> {
     return [];
+  }
+
+  async deleteByRepository(_repositoryId: string): Promise<void> {
+    // no-op - not exercised by these tests
   }
 }
 

@@ -35,6 +35,14 @@ class FakeChatRepository implements IChatRepository {
   async findById(id: string): Promise<ChatDocument | null> {
     return this.chats.get(id) ?? null;
   }
+
+  async findByRepositoryId(_repositoryId: string): Promise<ChatDocument[]> {
+    return [];
+  }
+
+  async deleteByRepositoryId(_repositoryId: string): Promise<void> {
+    // no-op - not exercised by these tests
+  }
 }
 
 class FakeMessageRepository implements IMessageRepository {
@@ -57,6 +65,10 @@ class FakeMessageRepository implements IMessageRepository {
 
   async findByChatId(chatId: string): Promise<MessageDocument[]> {
     return this.messages.filter((m) => m.chatId.toString() === chatId);
+  }
+
+  async deleteByChatId(_chatId: string): Promise<void> {
+    // no-op - not exercised by these tests
   }
 }
 

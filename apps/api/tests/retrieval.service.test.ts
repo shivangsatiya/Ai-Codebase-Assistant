@@ -33,6 +33,10 @@ class FakeChunkRepository implements IChunkRepository {
     this.lastCall = { repositoryId, queryVector, limit };
     return this.resultsToReturn;
   }
+
+  async deleteByRepository(_repositoryId: string): Promise<void> {
+    // no-op - not exercised by these tests
+  }
 }
 
 describe('RetrievalService', () => {

@@ -40,6 +40,7 @@ export interface IChunkRepository {
   insertManyIdempotent(chunks: ChunkToInsert[]): Promise<InsertResult>;
   countByRepository(repositoryId: string): Promise<number>;
   vectorSearch(repositoryId: string, queryVector: number[], limit: number): Promise<ChunkSearchResult[]>;
+  deleteByRepository(repositoryId: string): Promise<void>;
 }
 
 interface MongoWriteError {
@@ -161,5 +162,9 @@ export class MongoChunkRepository implements IChunkRepository {
     ]).exec();
 
     return results as ChunkSearchResult[];
+  }
+
+  async deleteByRepository(repositoryId: string): Promise<void> {
+    await ChunkModel.deleteMany({ repositoryId }).exec();
   }
 }

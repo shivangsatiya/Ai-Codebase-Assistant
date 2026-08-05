@@ -11,11 +11,14 @@ export interface CreateMessageInput {
 export interface IChatRepository {
   create(repositoryId: string, userId: string): Promise<ChatDocument>;
   findById(id: string): Promise<ChatDocument | null>;
+  findByRepositoryId(repositoryId: string): Promise<ChatDocument[]>;
+  deleteByRepositoryId(repositoryId: string): Promise<void>;
 }
 
 export interface IMessageRepository {
   create(input: CreateMessageInput): Promise<MessageDocument>;
   findByChatId(chatId: string): Promise<MessageDocument[]>;
+  deleteByChatId(chatId: string): Promise<void>;
 }
 
 export class MongoChatRepository implements IChatRepository {
@@ -25,6 +28,14 @@ export class MongoChatRepository implements IChatRepository {
 
   async findById(id: string): Promise<ChatDocument | null> {
     return ChatModel.findById(id).exec();
+  }
+
+  async findByRepositoryId(repositoryId: string): Promise<ChatDocument[]> {
+    return ChatModel.find({ repositoryId }).exec();
+  }
+
+  async deleteByRepositoryId(repositoryId: string): Promise<void> {
+    await ChatModel.deleteMany({ repositoryId }).exec();
   }
 }
 
@@ -40,5 +51,9 @@ export class MongoMessageRepository implements IMessageRepository {
 
   async findByChatId(chatId: string): Promise<MessageDocument[]> {
     return MessageModel.find({ chatId }).sort({ createdAt: 1 }).exec();
+  }
+
+  async deleteByChatId(chatId: string): Promise<void> {
+    await MessageModel.deleteMany({ chatId }).exec();
   }
 }

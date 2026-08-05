@@ -167,6 +167,8 @@ Ordered so each task leaves the project working, matching the Milestone 1.5 patt
 2. **`GitHubConnection` + `GitHubOAuthState` models and repositories.** **Status: ✅ Complete** — see the README's Milestone 2 section for the full account, including a real implementation detail (explicit `$set` vs. ambiguous plain-object update semantics) resolved during self-review.
 3. **The OAuth flow itself** (`GET /api/auth/github`, `GET /api/auth/github/callback`, `DELETE /api/auth/github`) — the connect/disconnect lifecycle, without touching the import pipeline yet. **Status: ✅ Complete** — see the README's Milestone 2 section for the full account, including a real XSS-shaped gap caught during self-review.
 4. **Enable private repos in the existing pipeline** (`GitHubClient`, `GitClonerClient` changes, the log-redaction fix) — this is where private-repo import actually starts working. **Status: ✅ Complete** — see the README's Milestone 2 section for the full account, including a serious credential-leak bug found only by testing against a real failing clone, not assumed fixed from the design alone.
-5. **Repository management endpoints** (`GET /api/repositories`, `DELETE /api/repositories/:id`, including chunk cascade-delete).
+5. **Repository management endpoints** (`GET /api/repositories`, `DELETE /api/repositories/:id`, including chunk cascade-delete). **Status: ✅ Complete** — see the README's Milestone 2 section for the full account, including the cascade being extended to Jobs/Chats/Messages beyond just Chunks, and a recurring type-checking cache issue this task caught and worked around directly.
+
+Every milestone task above is closed. Milestone 2 is complete.
 
 Each task gets the same treatment as every Milestone 1.5 task: rationale, self-review, tests, documentation — one at a time, not all five at once.

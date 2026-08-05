@@ -8,6 +8,7 @@ import { ChunkingService } from '../services/chunking.service';
 import { RetrievalService } from '../services/retrieval.service';
 import { ChatOrchestrationService } from '../services/chat-orchestration.service';
 import { RepositoryImportService } from '../services/repository-import.service';
+import { RepositoryManagementService } from '../services/repository-management.service';
 import { GitHubOAuthService } from '../services/github-oauth.service';
 import { MongoRepositoryRepository, MongoJobRepository } from '../repositories/repository.repository';
 import { MongoChunkRepository } from '../repositories/chunk.repository';
@@ -73,6 +74,14 @@ export const repositoryImportService = new RepositoryImportService(
 );
 
 export const retrievalService = new RetrievalService(embeddingProvider, chunkRepo, env.CHAT_RETRIEVAL_TOP_K);
+
+export const repositoryManagementService = new RepositoryManagementService(
+  repositoryRepo,
+  jobRepo,
+  chunkRepo,
+  chatRepo,
+  messageRepo,
+);
 
 export const chatOrchestrationService = new ChatOrchestrationService(
   chatRepo,
