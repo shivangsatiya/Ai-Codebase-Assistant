@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { requestLogger } from './middleware/request-logger';
 import { errorHandler } from './middleware/error-handler';
 import { authRouter } from './routes/auth.routes';
+import { githubOAuthRouter } from './routes/github-oauth.routes';
 import { repositoryRouter } from './routes/repository.routes';
 import { chatRouter } from './routes/chat.routes';
 
@@ -83,6 +84,7 @@ export function createApp(): Express {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/auth', githubOAuthRouter);
   app.use('/api/repositories', repositoryRouter);
   app.use('/api/chats', chatRouter);
 

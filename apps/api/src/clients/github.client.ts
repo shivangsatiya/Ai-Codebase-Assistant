@@ -18,7 +18,7 @@ export interface GitHubRepoInfo {
  */
 export interface IGitHubClient {
   parseRepoUrl(url: string): { owner: string; repo: string };
-  fetchRepoInfo(url: string): Promise<GitHubRepoInfo>;
+  fetchRepoInfo(url: string, userToken?: string): Promise<GitHubRepoInfo>;
 }
 
 const GITHUB_URL_PATTERN = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(\.git)?\/?$/;
@@ -28,10 +28,7 @@ const GITHUB_URL_PATTERN = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(\.git)
  * of just trying `git clone` and seeing what happens?
  *
  * A malformed or non-existent URL should fail fast with a clear 422/404,
- * not tie up a clone process for 30 seconds before timing out. And a
- * private repo needs to be rejected explicitly in Milestone 1 (private
- * repo support is a Milestone 2 feature requiring GitHub App auth) rather
- * than failing deep inside the clone with a confusing git auth error.
+ * not tie up a clone process for 30 seconds before timing out.
  */
 export class GitHubClient implements IGitHubClient {
   constructor(private readonly githubToken?: string) {}
@@ -49,17 +46,38 @@ export class GitHubClient implements IGitHubClient {
     return { owner, repo };
   }
 
-  async fetchRepoInfo(url: string): Promise<GitHubRepoInfo> {
+  /**
+   * Why does a userToken change whether a private repo is accepted,
+   * rather than private repos being unconditionally rejected the way
+   * Milestone 1 left them?
+   *
+   * Milestone 1's blanket rejection was correct for its own scope
+   * (private repo support genuinely needed GitHub OAuth, which didn't
+   * exist yet). Now that it does (Task 3), the right check isn't "is
+   * this repo private" - it's "does the CALLER have their own
+   * credential that can actually access it." If a userToken is supplied
+   * and the repo is private, GitHub's own API does the real access
+   * control: a token that can't see the repo gets a 404 here, already
+   * handled correctly by the existing NotFoundError branch below - no
+   * new authorization logic needed, GitHub does it for free.
+   *
+   * Why does userToken take precedence over the server-wide
+   * githubToken, rather than being combined or falling back?
+   *
+   * The user's own token is scoped to what THEY can access (including
+   * their private repos); the server-wide token is a generic
+   * rate-limit-raising credential with no special access. Using the
+   * user's token when available gets both the higher rate limit AND
+   * correct private-repo access in one call - there's no scenario where
+   * falling back to the weaker server token instead would be preferable.
+   */
+  async fetchRepoInfo(url: string, userToken?: string): Promise<GitHubRepoInfo> {
     const { owner, repo } = this.parseRepoUrl(url);
 
-    // Authenticated requests get 5000/hour instead of the 60/hour
-    // unauthenticated limit, which is also shared across everyone behind
-    // the same IP (a home router, office network, etc.) - a token isn't
-    // GitHub OAuth (that's Milestone 2's user-facing login), just a
-    // server-side credential for calling GitHub's own API reliably.
+    const effectiveToken = userToken ?? this.githubToken;
     const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-    if (this.githubToken) {
-      headers.Authorization = `Bearer ${this.githubToken}`;
+    if (effectiveToken) {
+      headers.Authorization = `Bearer ${effectiveToken}`;
     }
 
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
@@ -79,8 +97,8 @@ export class GitHubClient implements IGitHubClient {
       clone_url: string;
     };
 
-    if (data.private) {
-      throw new ForbiddenError('Private repositories are not supported yet');
+    if (data.private && !userToken) {
+      throw new ForbiddenError('This is a private repository - connect your GitHub account to import it');
     }
 
     return {

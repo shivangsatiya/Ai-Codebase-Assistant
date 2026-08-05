@@ -8,6 +8,12 @@ import type { IGitHubClient, GitHubRepoInfo } from '../src/clients/github.client
 import type { IGitClonerClient, ClonedRepo } from '../src/clients/git-cloner.client';
 import type { IEmbeddingProvider, EmbeddingInputType } from '../src/clients/embedding-provider';
 import type { IChunkingService, EnrichedChunk } from '../src/services/chunking.service';
+import type {
+  IGitHubConnectionRepository,
+  UpsertConnectionInput,
+} from '../src/repositories/github-connection.repository';
+import type { ITokenEncryptor, EncryptedValue } from '../src/utils/token-encryptor';
+import type { GitHubConnectionDocument } from '../src/models/github-connection.model';
 import type { RepositoryDocument, RepositoryStatus } from '../src/models/repository.model';
 import type { JobDocument, JobStage } from '../src/models/job.model';
 import { logger } from '../src/utils/logger';
@@ -150,6 +156,38 @@ class FakeChunkRepository implements IChunkRepository {
 }
 
 /**
+ * Returns null by default (no GitHub connection for this user) - these
+ * tests exercise import pipeline TIMING (Milestone 1.75), not
+ * private-repo/token behavior (Milestone 2 Task 4), so "this user has
+ * no connected GitHub account" - the public-repo path - is the correct
+ * default here. Private-repo-specific behavior has its own dedicated
+ * tests elsewhere.
+ */
+class FakeGitHubConnectionRepositoryForImport implements IGitHubConnectionRepository {
+  async upsert(_input: UpsertConnectionInput): Promise<GitHubConnectionDocument> {
+    throw new Error('Not used by these tests');
+  }
+
+  async findByUserId(_userId: string): Promise<GitHubConnectionDocument | null> {
+    return null;
+  }
+
+  async deleteByUserId(_userId: string): Promise<void> {
+    // no-op
+  }
+}
+
+class FakeTokenEncryptorForImport implements ITokenEncryptor {
+  encrypt(plaintext: string): EncryptedValue {
+    return { ciphertext: plaintext, iv: 'fake-iv', authTag: 'fake-tag', keyVersion: 1 };
+  }
+
+  decrypt(value: EncryptedValue): string {
+    return value.ciphertext;
+  }
+}
+
+/**
  * jest.spyOn types mock.calls arguments as unknown[] - this is just a
  * typed accessor for the structured log payload (the first argument to
  * every logger.info() call in this codebase), to avoid `as any` sprinkled
@@ -194,6 +232,8 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       new FakeChunkRepository(),
       100,
       500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -216,6 +256,8 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       new FakeChunkRepository(),
       100,
       500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -241,6 +283,8 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       new FakeChunkRepository(),
       100,
       500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -264,6 +308,8 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       new FakeChunkRepository(),
       100,
       500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -306,6 +352,8 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       new FakeChunkRepository(),
       100,
       500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');

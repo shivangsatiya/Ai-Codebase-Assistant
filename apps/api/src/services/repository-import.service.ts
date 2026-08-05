@@ -7,6 +7,8 @@ import type { IGitHubClient } from '../clients/github.client';
 import type { IGitClonerClient, ClonedRepo } from '../clients/git-cloner.client';
 import type { IEmbeddingProvider } from '../clients/embedding-provider';
 import type { IChunkingService } from './chunking.service';
+import type { IGitHubConnectionRepository } from '../repositories/github-connection.repository';
+import type { ITokenEncryptor } from '../utils/token-encryptor';
 import { walkRepoFiles } from '../utils/repo-file-walker';
 import { logger } from '../utils/logger';
 import type { RepositoryDocument } from '../models/repository.model';
@@ -41,14 +43,34 @@ export class RepositoryImportService {
     private readonly chunkRepo: IChunkRepository,
     private readonly maxRepoFiles: number,
     private readonly maxFileSizeBytes: number,
+    private readonly githubConnectionRepo: IGitHubConnectionRepository,
+    private readonly tokenEncryptor: ITokenEncryptor,
   ) {}
 
+  /**
+   * Why is the per-user GitHub token looked up here, via `ownerId`
+   * (taken from the authenticated caller's own verified JWT, never from
+   * anything client-supplied), rather than accepted as a parameter to
+   * this method?
+   *
+   * This is the Milestone 2 design review's explicit identity-resolution
+   * rule, actually implemented rather than just documented: which
+   * token gets used for an import must be resolved from the
+   * authenticated caller's own identity exclusively - never a
+   * repository id, a request body field, or any other client-influenced
+   * value. Resolving it here, from `ownerId` alone, makes that the only
+   * possible code path, rather than something a caller could get wrong
+   * by passing the wrong token in.
+   */
   async startImport(ownerId: string, githubUrl: string): Promise<ImportResult> {
+    const userToken = await this.resolveUserToken(ownerId);
+
     // Validates the URL shape AND confirms via the GitHub API that the
-    // repo exists and is public — throws ValidationError/NotFoundError/
-    // ForbiddenError before any DB record is created, so we never store a
-    // Repository doc for a request that was never going to succeed.
-    const repoInfo = await this.githubClient.fetchRepoInfo(githubUrl);
+    // repo exists and (if no userToken, or the token doesn't grant
+    // access) is public — throws ValidationError/NotFoundError/
+    // ForbiddenError before any DB record is created, so we never store
+    // a Repository doc for a request that was never going to succeed.
+    const repoInfo = await this.githubClient.fetchRepoInfo(githubUrl, userToken);
 
     const repository = await this.repositoryRepo.create({
       ownerId,
@@ -64,6 +86,8 @@ export class RepositoryImportService {
       job._id.toString(),
       repoInfo.cloneUrl,
       repoInfo.defaultBranch,
+      repoInfo.isPrivate,
+      userToken,
     ).catch((err) => {
       logger.error({ err, repositoryId: repository._id.toString() }, 'Unhandled error in import pipeline');
     });
@@ -71,11 +95,25 @@ export class RepositoryImportService {
     return { repository, job };
   }
 
+  private async resolveUserToken(ownerId: string): Promise<string | undefined> {
+    const connection = await this.githubConnectionRepo.findByUserId(ownerId);
+    if (!connection) return undefined;
+
+    return this.tokenEncryptor.decrypt({
+      ciphertext: connection.encryptedToken,
+      iv: connection.iv,
+      authTag: connection.authTag,
+      keyVersion: connection.keyVersion,
+    });
+  }
+
   private async runImportPipeline(
     repositoryId: string,
     jobId: string,
     cloneUrl: string,
     branch: string,
+    isPrivate: boolean,
+    userToken?: string,
   ): Promise<void> {
     const importStartedAt = performance.now();
 
@@ -85,7 +123,7 @@ export class RepositoryImportService {
     const cloneStartedAt = performance.now();
     let cloned: ClonedRepo;
     try {
-      cloned = await this.gitCloner.clone(cloneUrl, branch);
+      cloned = await this.gitCloner.clone(cloneUrl, branch, userToken);
     } catch (err) {
       await this.failImport(repositoryId, jobId, err, 'Clone failed');
       return;
@@ -197,6 +235,7 @@ export class RepositoryImportService {
           repositoryId,
           fileCount: files.length,
           chunkCount: allChunks.length,
+          isPrivate,
           durationMs: totalDurationMs,
           stages: {
             cloneMs: cloneDurationMs,

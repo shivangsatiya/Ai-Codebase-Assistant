@@ -57,20 +57,28 @@ const envSchema = z.object({
   // Milestone 2: encrypts GitHub OAuth tokens (and any future sensitive
   // secret needing reversible, not one-way, storage) at rest via
   // TokenEncryptor. Base64-encoded 32-byte value for AES-256 - generate
-  // with: openssl rand -base64 32 (same pattern as JWT_SECRET).
-  // Deliberately OPTIONAL here, not required: nothing in the
-  // composition root constructs a TokenEncryptor yet (that starts once
-  // GitHubConnection exists, later in this milestone) - marking this
-  // required now, before anything actually depends on it, would break
-  // every existing environment (local dev, the full test suite, and the
-  // already-working live deployment) that has no reason to have this
-  // variable set yet. Still strictly validated WHEN present, so a
-  // malformed key fails at boot once it does become required, not on
-  // the first real encryption attempt in production.
+  // with: openssl rand -base64 32 (same pattern as JWT_SECRET). Now
+  // required (was optional through Task 1-2) - this task's composition
+  // root actually constructs a TokenEncryptor and wires it into the
+  // OAuth flow for real, so a missing key now fails startup loudly
+  // rather than silently not mattering the way it did before anything
+  // consumed it.
   TOKEN_ENCRYPTION_KEY: z
     .string()
-    .min(44, 'TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte value - generate with: openssl rand -base64 32')
-    .optional(),
+    .min(44, 'TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte value - generate with: openssl rand -base64 32'),
+  // Milestone 2: a GitHub OAuth App's credentials (github.com -> Settings
+  // -> Developer settings -> OAuth Apps -> New OAuth App). The
+  // Authorization callback URL registered on GitHub MUST exactly match
+  // GITHUB_OAUTH_REDIRECT_URI below, or GitHub rejects the callback
+  // before this app ever sees it.
+  GITHUB_OAUTH_CLIENT_ID: z.string().min(1, 'GITHUB_OAUTH_CLIENT_ID is required'),
+  GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1, 'GITHUB_OAUTH_CLIENT_SECRET is required'),
+  GITHUB_OAUTH_REDIRECT_URI: z.string().url('GITHUB_OAUTH_REDIRECT_URI must be a full URL'),
+  // How many GET /api/auth/github requests (starting a connect attempt)
+  // a single user can make per hour - a real gap the design review
+  // required fixing, since being authenticated doesn't rate-limit
+  // anything on its own.
+  RATE_LIMIT_GITHUB_OAUTH_MAX: z.coerce.number().int().positive().default(10),
   // Repo-size ceiling (non-functional requirement: reject oversized repos
   // rather than let an import silently run for an hour or exhaust memory).
   MAX_REPO_FILES: z.coerce.number().int().positive().default(3000),

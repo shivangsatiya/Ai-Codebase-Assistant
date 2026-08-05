@@ -14,6 +14,14 @@ process.env.GROQ_MODEL = 'llama-3.3-70b-versatile';
 process.env.GROQ_MAX_TOKENS = '1024';
 process.env.CHAT_RETRIEVAL_TOP_K = '8';
 process.env.ALLOWED_ORIGINS = 'http://allowed-origin.test';
+// A real 32-byte value, base64-encoded (32 bytes of 'a' repeated, then
+// base64'd) - just needs to be valid, doesn't need to be secret for
+// tests.
+process.env.TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 'a').toString('base64');
+process.env.GITHUB_OAUTH_CLIENT_ID = 'test-oauth-client-id';
+process.env.GITHUB_OAUTH_CLIENT_SECRET = 'test-oauth-client-secret';
+process.env.GITHUB_OAUTH_REDIRECT_URI = 'http://localhost:4000/api/auth/github/callback';
+process.env.RATE_LIMIT_GITHUB_OAUTH_MAX = '10000';
 // Deliberately generous in tests - the real, low production limits would
 // break integration tests that legitimately make several sequential
 // requests to the same endpoint (e.g. auth.routes.test.ts registering

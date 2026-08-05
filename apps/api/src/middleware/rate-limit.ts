@@ -96,3 +96,20 @@ export const chatRateLimiter = rateLimit({
   keyGenerator: userOrIpKey,
   handler: rateLimitHandler,
 });
+
+/**
+ * User-based, same reasoning as importRateLimiter/chatRateLimiter.
+ * Applied to GET /api/auth/github specifically - being authenticated
+ * doesn't rate-limit anything on its own, and nothing else stops a
+ * buggy client (or a confused user double-clicking) from spamming
+ * GitHubOAuthState record creation. A real gap the design review
+ * required fixing, not present in the original design.
+ */
+export const githubOAuthRateLimiter = rateLimit({
+  windowMs: HOUR,
+  limit: env.RATE_LIMIT_GITHUB_OAUTH_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userOrIpKey,
+  handler: rateLimitHandler,
+});

@@ -45,6 +45,8 @@ export const REDACTED_PATHS = [
   '*.accessToken',
   '*.refreshToken',
   '*.token',
+  '*.encryptedToken',
+  '*.authTag',
 ];
 
 export const logger = pino({
