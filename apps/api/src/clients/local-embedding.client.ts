@@ -36,23 +36,45 @@ export type FeatureExtractor = (
  * which matters after already being burned once by an ONNX/runtime
  * version mismatch (the tree-sitter-wasms situation from Day 3-4).
  *
- * Why dtype: 'q8' (8-bit quantization) specifically?
+ * Why session_options constraining threads and the memory arena?
  *
- * The first real deployment to Render's free tier crashed with a
- * confirmed OOM kill ("Ran out of memory (used over 512MB)") while
- * loading this exact model - without an explicit dtype, the library
- * loads the full fp32-precision weights, using roughly 4x the memory of
- * an 8-bit quantized version for the same model. Quantization has a
- * well-established, minimal quality impact specifically for sentence
- * embedding models (a few percent at most in standard retrieval
- * benchmarks) - a fully justified trade-off here, both for fitting
- * inside a constrained memory budget and because this project already
- * accepted "general-purpose, not code-specific" as a quality trade-off
- * for local embeddings in the first place.
+ * Two earlier fixes were tried and both proved insufficient. The first
+ * deployment crashed with a confirmed OOM kill ("Ran out of memory
+ * (used over 512MB)") while loading this model at its default full fp32
+ * precision (~90MB) - the fix attempt used dtype: 'q8', which failed
+ * differently (a clean "file not found" error, since this specific
+ * model repository doesn't publish an int8/q8 variant at all).
+ * Switching to dtype: 'q4f16' - verified against the model's actual
+ * Hugging Face file listing as the smallest available variant (~29.8MB,
+ * roughly 3x smaller than fp32) - fixed THAT error, but the redeployed
+ * container still crashed with the same OOM signature (exit code 137 -
+ * SIGKILL - confirmed via Render's Events tab). That showed the model
+ * FILE size wasn't the dominant factor after all: onnxruntime's own
+ * default behavior allocates meaningful memory independent of model
+ * size - a CPU memory arena (`enableCpuMemArena`) pre-reserves a memory
+ * pool upfront to avoid repeated allocation during inference, and each
+ * worker thread (`intraOpNumThreads`/`interOpNumThreads`) gets its own
+ * buffers. On a genuinely constrained environment (Render's free and
+ * Starter tiers both cap at 512MB - confirmed by checking Render's
+ * actual current pricing rather than assuming Starter would help),
+ * these defaults - tuned for a "normal" multi-core machine, not a
+ * fractional-CPU container - can reserve considerably more than the
+ * workload strictly needs. Disabling the memory arena and memory
+ * pattern optimization, and capping thread counts to 1 each, are
+ * standard, documented levers specifically for memory-constrained
+ * deployments (trading some inference speed for a smaller, more
+ * predictable memory footprint) - grounded in the real, documented
+ * purpose of each setting, not another guess at a value.
  */
 const DEFAULT_MODEL = 'onnx-community/all-MiniLM-L6-v2-ONNX';
 const DEFAULT_BATCH_SIZE = 32;
 const DEFAULT_DTYPE = 'q4f16';
+const DEFAULT_SESSION_OPTIONS = {
+  intraOpNumThreads: 1,
+  interOpNumThreads: 1,
+  enableCpuMemArena: false,
+  enableMemPattern: false,
+};
 
 export class LocalEmbeddingClient implements IEmbeddingProvider {
   private readonly modelName: string;
@@ -79,6 +101,7 @@ export class LocalEmbeddingClient implements IEmbeddingProvider {
       (() =>
         pipeline('feature-extraction', this.modelName, {
           dtype: DEFAULT_DTYPE,
+          session_options: DEFAULT_SESSION_OPTIONS,
         }) as unknown as Promise<FeatureExtractor>);
   }
 
@@ -125,4 +148,3 @@ export class LocalEmbeddingClient implements IEmbeddingProvider {
     return allEmbeddings;
   }
 }
-
