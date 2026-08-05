@@ -64,8 +64,16 @@ services:
         value: '30'
       - key: ALLOWED_ORIGINS
         sync: false # set to your real frontend origin(s) once one exists; comma-separated for more than one
+      # Deliberately conservative (not the 3000 default suitable for a
+      # normally-resourced deployment) - Render's free tier caps memory
+      # at 512MB, and a real live deployment confirmed via a confirmed
+      # OOM crash (SIGKILL, exit code 137) that a 40-file repository
+      # exceeds that ceiling during embedding, while a ~5-file repo
+      # works cleanly. 15 gives real safety margin without needing to
+      # pinpoint the exact crash threshold. Raise this back up if this
+      # service is ever upgraded to a plan with more than 512MB RAM.
       - key: MAX_REPO_FILES
-        value: '3000'
+        value: '15'
       - key: MAX_FILE_SIZE_KB
         value: '500'
       - key: GITHUB_TOKEN
