@@ -7,6 +7,8 @@ import { ChunkModel } from '../src/models/chunk.model';
 import { ChatModel } from '../src/models/chat.model';
 import { MessageModel } from '../src/models/message.model';
 import { RefreshTokenModel } from '../src/models/refresh-token.model';
+import { GitHubConnectionModel } from '../src/models/github-connection.model';
+import { GitHubOAuthStateModel } from '../src/models/github-oauth-state.model';
 
 let mongoServer: MongoMemoryServer;
 
@@ -32,10 +34,13 @@ beforeAll(async () => {
   // a test could insert data before a unique index actually exists to
   // enforce anything, exactly as happened with the chunk idempotency
   // test before this fix (see config/db.ts for the same fix in the real
-  // app startup path). RefreshTokenModel has a unique index on `jti` -
-  // same risk shape. ChatModel/MessageModel were missing here since Day
-  // 5 (their indexes aren't unique, so the failure mode is milder, but
-  // every model with a declared index belongs in this list).
+  // app startup path). RefreshTokenModel, GitHubConnectionModel, and
+  // GitHubOAuthStateModel each have a unique index - same risk shape.
+  // ChatModel/MessageModel were missing here since Day 5 (their indexes
+  // aren't unique, so the failure mode is milder, but every model with a
+  // declared index belongs in this list) - this checklist item has been
+  // missed once already, so every new indexed model gets checked against
+  // it deliberately now.
   await Promise.all([
     UserModel.init(),
     RepositoryModel.init(),
@@ -44,6 +49,8 @@ beforeAll(async () => {
     ChatModel.init(),
     MessageModel.init(),
     RefreshTokenModel.init(),
+    GitHubConnectionModel.init(),
+    GitHubOAuthStateModel.init(),
   ]);
 });
 

@@ -8,6 +8,8 @@ import { ChunkModel } from '../models/chunk.model';
 import { ChatModel } from '../models/chat.model';
 import { MessageModel } from '../models/message.model';
 import { RefreshTokenModel } from '../models/refresh-token.model';
+import { GitHubConnectionModel } from '../models/github-connection.model';
+import { GitHubOAuthStateModel } from '../models/github-oauth-state.model';
 
 export async function connectDB(): Promise<void> {
   mongoose.set('strictQuery', true);
@@ -49,6 +51,13 @@ export async function connectDB(): Promise<void> {
  * and are added here for consistency - every model with a declared
  * index belongs in this list, not just the ones that would break loudly
  * if skipped.
+ *
+ * GitHubConnectionModel (unique on userId) and GitHubOAuthStateModel
+ * (unique on state) are both the same risk shape as RefreshTokenModel -
+ * this checklist item has been missed once already (Milestone 1.5, Task
+ * 3, for ChatModel/MessageModel), so every new indexed model added to
+ * this project gets checked against this list deliberately now, not by
+ * memory.
  */
 async function ensureIndexesReady(): Promise<void> {
   await Promise.all([
@@ -59,6 +68,8 @@ async function ensureIndexesReady(): Promise<void> {
     ChatModel.init(),
     MessageModel.init(),
     RefreshTokenModel.init(),
+    GitHubConnectionModel.init(),
+    GitHubOAuthStateModel.init(),
   ]);
   logger.info('MongoDB indexes confirmed built');
 }

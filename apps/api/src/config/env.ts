@@ -46,14 +46,31 @@ const envSchema = z.object({
     .transform((val) => val.split(',').map((origin) => origin.trim()).filter(Boolean)),
   // How many chunks to retrieve per question - design doc starts at 8.
   CHAT_RETRIEVAL_TOP_K: z.coerce.number().int().positive().default(8),
-  // Optional - not GitHub OAuth (that's Milestone 2), just a personal
-  // access token used server-side to authenticate calls to the GitHub
-  // REST API. Unauthenticated requests are capped at 60/hour *per IP*,
-  // shared across everyone behind that IP (a home router, an office
-  // network, etc.) - a token raises that to 5000/hour for this server
-  // specifically. A token with zero scopes is enough for reading public
-  // repo metadata.
+  // Not GitHub OAuth (see TOKEN_ENCRYPTION_KEY and GitHubConnection for
+  // that, Milestone 2) - just a personal access token used server-side
+  // to authenticate calls to the GitHub REST API. Unauthenticated
+  // requests are capped at 60/hour *per IP*, shared across everyone
+  // behind that IP (a home router, an office network, etc.) - a token
+  // raises that to 5000/hour for this server specifically. A token with
+  // zero scopes is enough for reading public repo metadata.
   GITHUB_TOKEN: z.string().optional(),
+  // Milestone 2: encrypts GitHub OAuth tokens (and any future sensitive
+  // secret needing reversible, not one-way, storage) at rest via
+  // TokenEncryptor. Base64-encoded 32-byte value for AES-256 - generate
+  // with: openssl rand -base64 32 (same pattern as JWT_SECRET).
+  // Deliberately OPTIONAL here, not required: nothing in the
+  // composition root constructs a TokenEncryptor yet (that starts once
+  // GitHubConnection exists, later in this milestone) - marking this
+  // required now, before anything actually depends on it, would break
+  // every existing environment (local dev, the full test suite, and the
+  // already-working live deployment) that has no reason to have this
+  // variable set yet. Still strictly validated WHEN present, so a
+  // malformed key fails at boot once it does become required, not on
+  // the first real encryption attempt in production.
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .min(44, 'TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte value - generate with: openssl rand -base64 32')
+    .optional(),
   // Repo-size ceiling (non-functional requirement: reject oversized repos
   // rather than let an import silently run for an hour or exhaust memory).
   MAX_REPO_FILES: z.coerce.number().int().positive().default(3000),
