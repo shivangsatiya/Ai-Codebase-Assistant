@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/error-handler';
 import { authRouter } from './routes/auth.routes';
 import { githubOAuthRouter } from './routes/github-oauth.routes';
 import { repositoryRouter } from './routes/repository.routes';
+import { knowledgeGraphRouter } from './routes/knowledge-graph.routes';
 import { chatRouter } from './routes/chat.routes';
 
 export function createApp(): Express {
@@ -86,6 +87,7 @@ export function createApp(): Express {
   app.use('/api/auth', authRouter);
   app.use('/api/auth', githubOAuthRouter);
   app.use('/api/repositories', repositoryRouter);
+  app.use('/api/repositories', knowledgeGraphRouter);
   app.use('/api/chats', chatRouter);
 
   // Must be registered last — Express identifies error-handling

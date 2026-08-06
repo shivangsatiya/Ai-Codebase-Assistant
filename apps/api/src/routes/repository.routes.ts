@@ -25,7 +25,7 @@ export const repositoryRouter = Router();
  * 404, not 403, on a mismatched owner - confirming a repository id
  * exists at all leaks information to a user who doesn't own it.
  */
-async function getOwnedRepositoryOrThrow(id: string | undefined, userId: string): Promise<RepositoryDocument> {
+export async function getOwnedRepositoryOrThrow(id: string | undefined, userId: string): Promise<RepositoryDocument> {
   if (!id) {
     throw new NotFoundError('Repository not found');
   }

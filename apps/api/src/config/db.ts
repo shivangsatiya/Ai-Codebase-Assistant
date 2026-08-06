@@ -10,6 +10,7 @@ import { MessageModel } from '../models/message.model';
 import { RefreshTokenModel } from '../models/refresh-token.model';
 import { GitHubConnectionModel } from '../models/github-connection.model';
 import { GitHubOAuthStateModel } from '../models/github-oauth-state.model';
+import { RepositoryKnowledgeGraphModel } from '../models/repository-knowledge-graph.model';
 
 export async function connectDB(): Promise<void> {
   mongoose.set('strictQuery', true);
@@ -70,6 +71,7 @@ async function ensureIndexesReady(): Promise<void> {
     RefreshTokenModel.init(),
     GitHubConnectionModel.init(),
     GitHubOAuthStateModel.init(),
+    RepositoryKnowledgeGraphModel.init(),
   ]);
   logger.info('MongoDB indexes confirmed built');
 }

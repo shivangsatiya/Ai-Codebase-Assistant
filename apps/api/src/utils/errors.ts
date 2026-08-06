@@ -55,3 +55,9 @@ export class RateLimitedError extends AppError {
     super('RATE_LIMITED', message, 429);
   }
 }
+
+export class NotImplementedError extends AppError {
+  constructor(message = 'Not implemented yet') {
+    super('NOT_IMPLEMENTED', message, 501);
+  }
+}

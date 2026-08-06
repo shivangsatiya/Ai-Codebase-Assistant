@@ -15,7 +15,15 @@ import { MongoChunkRepository } from '../repositories/chunk.repository';
 import { MongoChatRepository, MongoMessageRepository } from '../repositories/chat.repository';
 import { MongoGitHubConnectionRepository } from '../repositories/github-connection.repository';
 import { MongoGitHubOAuthStateRepository } from '../repositories/github-oauth-state.repository';
+import { MongoRepositoryKnowledgeGraphRepository } from '../repositories/repository-knowledge-graph.repository';
 import { TokenEncryptor } from '../utils/token-encryptor';
+import { DeterministicExtractor } from '../services/knowledge-graph/deterministic-extractor';
+import { RepositoryIntelligencePipeline } from '../services/knowledge-graph/repository-intelligence-pipeline';
+import { KnowledgeGraphGenerationService } from '../services/knowledge-graph/knowledge-graph-generation.service';
+import { ArchitectureIntelligenceEngine } from '../services/knowledge-graph/architecture-intelligence-engine';
+import { CycleDetector } from '../services/knowledge-graph/algorithms/cycle-detector';
+import { DependencyAnalyzer } from '../services/knowledge-graph/algorithms/dependency-analyzer';
+import { QuestionRouter } from '../services/knowledge-graph/question-router';
 
 /**
  * Why one composition root instead of each route file constructing its
@@ -36,6 +44,7 @@ export const chatRepo = new MongoChatRepository();
 export const messageRepo = new MongoMessageRepository();
 export const githubConnectionRepo = new MongoGitHubConnectionRepository();
 export const githubOAuthStateRepo = new MongoGitHubOAuthStateRepository();
+export const knowledgeGraphRepo = new MongoRepositoryKnowledgeGraphRepository();
 
 export const githubClient = new GitHubClient(env.GITHUB_TOKEN);
 export const gitCloner = new GitClonerClient();
@@ -59,6 +68,19 @@ export const githubOAuthClient = new GitHubOAuthClient(
 const CURRENT_TOKEN_ENCRYPTION_KEY_VERSION = 1;
 export const tokenEncryptor = new TokenEncryptor(env.TOKEN_ENCRYPTION_KEY, CURRENT_TOKEN_ENCRYPTION_KEY_VERSION);
 
+export const deterministicExtractor = new DeterministicExtractor();
+export const repositoryIntelligencePipeline = new RepositoryIntelligencePipeline(knowledgeGraphRepo);
+export const knowledgeGraphGenerationService = new KnowledgeGraphGenerationService(
+  deterministicExtractor,
+  repositoryIntelligencePipeline,
+);
+
+export const architectureIntelligenceEngine = new ArchitectureIntelligenceEngine();
+architectureIntelligenceEngine.register(new CycleDetector());
+architectureIntelligenceEngine.register(new DependencyAnalyzer());
+
+export const questionRouter = new QuestionRouter(architectureIntelligenceEngine);
+
 export const repositoryImportService = new RepositoryImportService(
   repositoryRepo,
   jobRepo,
@@ -71,6 +93,7 @@ export const repositoryImportService = new RepositoryImportService(
   env.MAX_FILE_SIZE_KB,
   githubConnectionRepo,
   tokenEncryptor,
+  knowledgeGraphGenerationService,
 );
 
 export const retrievalService = new RetrievalService(embeddingProvider, chunkRepo, env.CHAT_RETRIEVAL_TOP_K);

@@ -9,6 +9,7 @@ import { MessageModel } from '../src/models/message.model';
 import { RefreshTokenModel } from '../src/models/refresh-token.model';
 import { GitHubConnectionModel } from '../src/models/github-connection.model';
 import { GitHubOAuthStateModel } from '../src/models/github-oauth-state.model';
+import { RepositoryKnowledgeGraphModel } from '../src/models/repository-knowledge-graph.model';
 
 let mongoServer: MongoMemoryServer;
 
@@ -51,6 +52,7 @@ beforeAll(async () => {
     RefreshTokenModel.init(),
     GitHubConnectionModel.init(),
     GitHubOAuthStateModel.init(),
+    RepositoryKnowledgeGraphModel.init(),
   ]);
 });
 

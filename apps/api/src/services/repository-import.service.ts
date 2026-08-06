@@ -9,6 +9,7 @@ import type { IEmbeddingProvider } from '../clients/embedding-provider';
 import type { IChunkingService } from './chunking.service';
 import type { IGitHubConnectionRepository } from '../repositories/github-connection.repository';
 import type { ITokenEncryptor } from '../utils/token-encryptor';
+import type { IKnowledgeGraphGenerationService } from './knowledge-graph/knowledge-graph-generation.service';
 import { walkRepoFiles } from '../utils/repo-file-walker';
 import { logger } from '../utils/logger';
 import type { RepositoryDocument } from '../models/repository.model';
@@ -45,6 +46,7 @@ export class RepositoryImportService {
     private readonly maxFileSizeBytes: number,
     private readonly githubConnectionRepo: IGitHubConnectionRepository,
     private readonly tokenEncryptor: ITokenEncryptor,
+    private readonly knowledgeGraphGenerationService: IKnowledgeGraphGenerationService,
   ) {}
 
   /**
@@ -212,6 +214,70 @@ export class RepositoryImportService {
       const storeDurationMs = Math.round(performance.now() - storeStartedAt);
       logger.info({ repositoryId, ...insertResult, durationMs: storeDurationMs }, 'Chunks stored');
 
+      /**
+       * Why is this wrapped in its own try/catch, never allowed to call
+       * failImport()?
+       *
+       * A graph-generation failure must not fail the whole import - the
+       * user's primary goal (chat with their repo) already succeeded by
+       * this point, and shouldn't be undone by a problem in a genuinely
+       * separate, additive feature. Logged clearly either way, exactly
+       * like every other stage, but never fatal to the import itself.
+       *
+       * Why read file content a second time here, rather than keep it
+       * around from the chunking loop above?
+       *
+       * Keeping every file's full content in memory for the whole
+       * pipeline's duration would meaningfully increase peak memory
+       * usage - the exact category of problem the real OOM incident
+       * (Milestone 1.5->1.75) was about. Re-reading is cheap at this
+       * project's MAX_REPO_FILES=15 scale and keeps the existing,
+       * already-tested chunking loop's memory profile completely
+       * unchanged rather than restructuring it to hold onto content it
+       * doesn't otherwise need.
+       *
+       * Why must this run here, before cleanup(), and not as a later,
+       * separate job?
+       *
+       * DeterministicExtractor needs each file's FULL source to find
+       * import statements - a chunk only ever contains one function's
+       * or class's content, and cleanup() (in the finally block below)
+       * deletes the cloned source directory the moment this whole try
+       * block exits.
+       */
+      const graphStartedAt = performance.now();
+      let graphDurationMs = 0;
+      try {
+        const extractorFiles = [];
+        for (const file of files) {
+          const content = await readFile(file.absolutePath, 'utf-8').catch(() => null);
+          if (content === null) continue;
+          extractorFiles.push({ relativePath: file.relativePath, content, extension: extname(file.relativePath) });
+        }
+
+        const extractorSymbols = allChunks.map((c) => ({
+          filePath: c.filePath,
+          chunkType: c.chunkType,
+          symbolName: c.symbolName,
+          language: c.language,
+        }));
+
+        const graphResult = await this.knowledgeGraphGenerationService.generateGraph(
+          repositoryId,
+          cloned.commitSha,
+          extractorFiles,
+          extractorSymbols,
+        );
+        graphDurationMs = Math.round(performance.now() - graphStartedAt);
+        logger.info(
+          { repositoryId, commitSha: cloned.commitSha, status: graphResult.status, durationMs: graphDurationMs },
+          'Knowledge graph generation complete',
+        );
+      } catch (err) {
+        graphDurationMs = Math.round(performance.now() - graphStartedAt);
+        logger.error({ err, repositoryId, durationMs: graphDurationMs }, 'Knowledge graph generation failed');
+      }
+
       await this.repositoryRepo.updateStatus(repositoryId, 'ready', { fileCount: files.length });
       await this.jobRepo.updateStage(jobId, 'complete', 100);
 
@@ -243,6 +309,7 @@ export class RepositoryImportService {
             chunkMs: chunkDurationMs,
             embedMs: embedDurationMs,
             storeMs: storeDurationMs,
+            graphMs: graphDurationMs,
           },
         },
         'Import complete',

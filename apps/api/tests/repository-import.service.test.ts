@@ -13,6 +13,8 @@ import type {
   UpsertConnectionInput,
 } from '../src/repositories/github-connection.repository';
 import type { ITokenEncryptor, EncryptedValue } from '../src/utils/token-encryptor';
+import type { IKnowledgeGraphGenerationService } from '../src/services/knowledge-graph/knowledge-graph-generation.service';
+import type { PipelineResult } from '../src/services/knowledge-graph/types';
 import type { GitHubConnectionDocument } from '../src/models/github-connection.model';
 import type { RepositoryDocument, RepositoryStatus } from '../src/models/repository.model';
 import type { JobDocument, JobStage } from '../src/models/job.model';
@@ -204,6 +206,26 @@ class FakeTokenEncryptorForImport implements ITokenEncryptor {
 }
 
 /**
+ * Returns a fixed 'ready' result by default - these tests exercise
+ * import pipeline TIMING and behavior (Milestone 1.75 / Task 3's own
+ * non-fatal wiring), not knowledge-graph generation correctness itself,
+ * which has its own dedicated test suites (Tasks 1-2 and this task's
+ * own knowledge-graph-generation.service.test.ts).
+ */
+class FakeKnowledgeGraphGenerationServiceForImport implements IKnowledgeGraphGenerationService {
+  public calls: Array<{ repositoryId: string; commitSha: string }> = [];
+  constructor(private readonly shouldThrow = false) {}
+
+  async generateGraph(repositoryId: string, commitSha: string): Promise<PipelineResult> {
+    this.calls.push({ repositoryId, commitSha });
+    if (this.shouldThrow) {
+      throw new Error('Simulated graph generation failure');
+    }
+    return { status: 'ready', repositoryId, commitSha, nodes: [], edges: [] };
+  }
+}
+
+/**
  * jest.spyOn types mock.calls arguments as unknown[] - this is just a
  * typed accessor for the structured log payload (the first argument to
  * every logger.info() call in this codebase), to avoid `as any` sprinkled
@@ -250,6 +272,7 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       500,
       new FakeGitHubConnectionRepositoryForImport(),
       new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -274,6 +297,7 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       500,
       new FakeGitHubConnectionRepositoryForImport(),
       new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -301,6 +325,7 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       500,
       new FakeGitHubConnectionRepositoryForImport(),
       new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -326,6 +351,7 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       500,
       new FakeGitHubConnectionRepositoryForImport(),
       new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -370,6 +396,7 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
       500,
       new FakeGitHubConnectionRepositoryForImport(),
       new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(),
     );
 
     await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
@@ -378,5 +405,63 @@ describe('RepositoryImportService - pipeline timing (observability)', () => {
 
     const summaryLog = infoSpy.mock.calls.find((call) => call[1] === 'Import complete');
     expect(summaryLog).toBeUndefined();
+  });
+});
+
+describe('RepositoryImportService - knowledge graph generation is non-fatal to the import', () => {
+  it('the import still completes successfully even when graph generation throws', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    const repositoryRepo = new FakeRepositoryRepository();
+    const service = new RepositoryImportService(
+      repositoryRepo,
+      new FakeJobRepository(),
+      new FakeGitHubClient(),
+      new FakeGitClonerClient(0),
+      new FakeChunkingService(0),
+      new FakeEmbeddingProvider(0),
+      new FakeChunkRepository(),
+      100,
+      500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(true), // shouldThrow = true
+    );
+
+    await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
+    await waitForImportComplete(infoSpy);
+
+    // The real proof: the import's own status update to 'ready' still
+    // happened, and "Import complete" still logged, despite graph
+    // generation having thrown - the user's primary goal succeeded
+    // regardless of the separate, additive feature's failure.
+    expect(repositoryRepo.statusUpdates.some((u) => u.status === 'ready')).toBe(true);
+    const summaryLog = infoSpy.mock.calls.find((call) => call[1] === 'Import complete');
+    expect(summaryLog).toBeDefined();
+  });
+
+  it('a graph generation failure is logged clearly as its own event, not silently swallowed', async () => {
+    const errorSpy = jest.spyOn(logger, 'error');
+    const service = new RepositoryImportService(
+      new FakeRepositoryRepository(),
+      new FakeJobRepository(),
+      new FakeGitHubClient(),
+      new FakeGitClonerClient(0),
+      new FakeChunkingService(0),
+      new FakeEmbeddingProvider(0),
+      new FakeChunkRepository(),
+      100,
+      500,
+      new FakeGitHubConnectionRepositoryForImport(),
+      new FakeTokenEncryptorForImport(),
+      new FakeKnowledgeGraphGenerationServiceForImport(true),
+    );
+
+    const infoSpy = jest.spyOn(logger, 'info');
+    await service.startImport('user-1', 'https://github.com/test-owner/test-repo');
+    await waitForImportComplete(infoSpy);
+
+    const graphFailureLog = errorSpy.mock.calls.find((call) => call[1] === 'Knowledge graph generation failed');
+    expect(graphFailureLog).toBeDefined();
   });
 });
