@@ -13,7 +13,15 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BaseUrl,
 
-    [string]$TestRepo = "https://github.com/lukeed/klona",
+    # A genuinely small repo, well under MAX_REPO_FILES=15 - klona (40
+    # files) was the original default, from before the OOM incident
+    # (Milestone 1.5->1.75) established that limit specifically to
+    # reject repos this size cleanly rather than crash the server. The
+    # default here was never updated to match, meaning every run of
+    # this script without an explicit -TestRepo override produced the
+    # exact same false alarm - not a new regression, but a real, small,
+    # recurring gap worth fixing directly rather than just noting.
+    [string]$TestRepo = "https://github.com/sindresorhus/is-fullwidth-code-point",
 
     [int]$ImportTimeoutSeconds = 180
 )
