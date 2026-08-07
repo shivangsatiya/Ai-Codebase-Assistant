@@ -2,9 +2,11 @@ import { Router, type Response, type NextFunction } from 'express';
 import { knowledgeGraphRepo, architectureIntelligenceEngine, questionRouter } from '../config/composition-root';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/require-auth';
 import { validateBody } from '../middleware/validate';
+import { chatRateLimiter } from '../middleware/rate-limit';
 import { getOwnedRepositoryOrThrow } from './repository.routes';
 import { ValidationError, NotFoundError } from '../utils/errors';
 import { askQuestionSchema, type AskQuestionInput } from './knowledge-graph.schemas';
+import { logger } from '../utils/logger';
 
 export const knowledgeGraphRouter = Router();
 
@@ -124,6 +126,7 @@ knowledgeGraphRouter.post(
 knowledgeGraphRouter.post(
   '/:id/graph/ask',
   requireAuth,
+  chatRateLimiter,
   validateBody(askQuestionSchema),
   async (req: AuthenticatedRequest & { body: AskQuestionInput }, res: Response, next: NextFunction) => {
     try {
@@ -134,29 +137,70 @@ knowledgeGraphRouter.post(
         throw new NotFoundError('No ready knowledge graph exists yet for this repository');
       }
 
-      /**
-       * Why does this route not stream, unlike existing chat, even
-       * though the frozen design's interaction model says Hybrid/
-       * Semantic answers should stream?
-       *
-       * This task scopes to Pure Graph and Intelligence only - both
-       * complete synchronously (a graph traversal or algorithm run, no
-       * LLM token-by-token generation involved), so there's nothing to
-       * stream yet. Task 6 adds streaming specifically for the
-       * Hybrid/Semantic paths, reusing the existing SSE infrastructure
-       * from chat.routes.ts rather than duplicating it here.
-       */
-      const answer = await questionRouter.ask(
-        { nodes: graph.nodes, edges: graph.edges },
-        {
-          question: req.body.question,
-          nodeId: req.body.nodeId,
-          targetNodeId: req.body.targetNodeId,
-          direction: req.body.direction,
-        },
-      );
+      const graphInput = { nodes: graph.nodes, edges: graph.edges };
+      const askParams = {
+        question: req.body.question,
+        nodeId: req.body.nodeId,
+        targetNodeId: req.body.targetNodeId,
+        direction: req.body.direction,
+      };
 
-      res.status(200).json(answer);
+      /**
+       * Classified once, here, specifically to decide the HTTP response
+       * SHAPE before either questionRouter method runs - Pure Graph and
+       * Intelligence questions complete synchronously and get a plain
+       * JSON response; Hybrid and Pure Semantic questions stream,
+       * reusing the exact SSE pattern chat.routes.ts already
+       * established (manual headers, flushHeaders() for immediate
+       * connection open, client-disconnect handling, a final `done` or
+       * `error` event) rather than duplicating it.
+       */
+      const classification = questionRouter.classify(req.body.question);
+
+      if (classification.category === 'pure_graph' || classification.category === 'intelligence') {
+        const answer = await questionRouter.ask(graphInput, askParams);
+        res.status(200).json(answer);
+        return;
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      res.flushHeaders();
+
+      let clientDisconnected = false;
+      req.on('close', () => {
+        clientDisconnected = true;
+      });
+
+      try {
+        for await (const event of questionRouter.streamAsk(
+          repository._id.toString(),
+          graphInput,
+          classification.category,
+          askParams,
+        )) {
+          if (clientDisconnected) break;
+          if (event.type === 'token') {
+            res.write(`data: ${JSON.stringify({ token: event.text })}\n\n`);
+          }
+        }
+
+        if (!clientDisconnected) {
+          res.write(`event: done\ndata: {}\n\n`);
+        }
+      } catch (err) {
+        logger.error({ err, repositoryId: repository._id.toString() }, 'Error during graph-ask stream');
+        if (!clientDisconnected) {
+          res.write(
+            `event: error\ndata: ${JSON.stringify({ message: 'The response was interrupted. Please try again.' })}\n\n`,
+          );
+        }
+      } finally {
+        res.end();
+      }
     } catch (err) {
       next(err);
     }

@@ -18,6 +18,7 @@ import { MongoGitHubOAuthStateRepository } from '../repositories/github-oauth-st
 import { MongoRepositoryKnowledgeGraphRepository } from '../repositories/repository-knowledge-graph.repository';
 import { TokenEncryptor } from '../utils/token-encryptor';
 import { DeterministicExtractor } from '../services/knowledge-graph/deterministic-extractor';
+import { InferredAnnotationExtractor } from '../services/knowledge-graph/inferred-annotation-extractor';
 import { RepositoryIntelligencePipeline } from '../services/knowledge-graph/repository-intelligence-pipeline';
 import { KnowledgeGraphGenerationService } from '../services/knowledge-graph/knowledge-graph-generation.service';
 import { ArchitectureIntelligenceEngine } from '../services/knowledge-graph/architecture-intelligence-engine';
@@ -69,17 +70,17 @@ const CURRENT_TOKEN_ENCRYPTION_KEY_VERSION = 1;
 export const tokenEncryptor = new TokenEncryptor(env.TOKEN_ENCRYPTION_KEY, CURRENT_TOKEN_ENCRYPTION_KEY_VERSION);
 
 export const deterministicExtractor = new DeterministicExtractor();
+export const inferredAnnotationExtractor = new InferredAnnotationExtractor(chatCompletionProvider);
 export const repositoryIntelligencePipeline = new RepositoryIntelligencePipeline(knowledgeGraphRepo);
 export const knowledgeGraphGenerationService = new KnowledgeGraphGenerationService(
   deterministicExtractor,
+  inferredAnnotationExtractor,
   repositoryIntelligencePipeline,
 );
 
 export const architectureIntelligenceEngine = new ArchitectureIntelligenceEngine();
 architectureIntelligenceEngine.register(new CycleDetector());
 architectureIntelligenceEngine.register(new DependencyAnalyzer());
-
-export const questionRouter = new QuestionRouter(architectureIntelligenceEngine);
 
 export const repositoryImportService = new RepositoryImportService(
   repositoryRepo,
@@ -97,6 +98,14 @@ export const repositoryImportService = new RepositoryImportService(
 );
 
 export const retrievalService = new RetrievalService(embeddingProvider, chunkRepo, env.CHAT_RETRIEVAL_TOP_K);
+
+// Declared here, after retrievalService and chatCompletionProvider both
+// already exist - a real ordering bug was caught here during this
+// task's own type-check/review (retrievalService didn't exist yet at
+// the point questionRouter was originally declared, which would have
+// thrown a ReferenceError at server startup), fixed by moving this
+// declaration to after both its real dependencies.
+export const questionRouter = new QuestionRouter(architectureIntelligenceEngine, retrievalService, chatCompletionProvider);
 
 export const repositoryManagementService = new RepositoryManagementService(
   repositoryRepo,

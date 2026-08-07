@@ -32,6 +32,18 @@ const NODE_ID_BUILDERS: Record<string, (components: string[]) => string> = {
   method: (c) => `method:${canonicalizePath(c[0]!)}#${c[1]}`,
   package: (c) => `package:${c[0]}`,
   route: (c) => `route:${c[0]!.toUpperCase()}:${c[1]}`,
+  // Tier 3 (InferredAnnotationExtractor) types - identity-scoped to the
+  // file that defines them, the same scheme as class/function/method,
+  // since a file/annotation classification is inherently per-file at
+  // this project's current extraction granularity.
+  service: (c) => `service:${canonicalizePath(c[0]!)}`,
+  controller: (c) => `controller:${canonicalizePath(c[0]!)}`,
+  dbModel: (c) => `dbModel:${canonicalizePath(c[0]!)}`,
+  cache: (c) => `cache:${canonicalizePath(c[0]!)}`,
+  queue: (c) => `queue:${canonicalizePath(c[0]!)}`,
+  event: (c) => `event:${canonicalizePath(c[0]!)}`,
+  configuration: (c) => `configuration:${canonicalizePath(c[0]!)}`,
+  authComponent: (c) => `authComponent:${canonicalizePath(c[0]!)}`,
 };
 
 export class UnknownNodeTypeError extends Error {

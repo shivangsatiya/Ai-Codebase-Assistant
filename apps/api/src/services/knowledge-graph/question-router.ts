@@ -1,4 +1,7 @@
 import type { ArchitectureIntelligenceEngine, GraphInput } from './architecture-intelligence-engine';
+import type { IRetrievalService } from '../retrieval.service';
+import type { IChatCompletionProvider } from '../../clients/chat-completion-provider';
+import { buildGraphAugmentedPrompt, type GraphFact } from './graph-prompt';
 import { NotImplementedError } from '../../utils/errors';
 
 export type QuestionCategory = 'pure_graph' | 'intelligence' | 'hybrid' | 'pure_semantic';
@@ -15,6 +18,8 @@ export interface RouterAnswer {
   algorithm?: string;
   result?: unknown;
 }
+
+export type RouterStreamEvent = { type: 'token'; text: string } | { type: 'done' };
 
 interface Classification {
   category: QuestionCategory;
@@ -52,7 +57,11 @@ interface Classification {
  * established for `nodeId` in the frozen design's interaction model.
  */
 export class QuestionRouter {
-  constructor(private readonly aie: ArchitectureIntelligenceEngine) {}
+  constructor(
+    private readonly aie: ArchitectureIntelligenceEngine,
+    private readonly retrievalService: IRetrievalService,
+    private readonly llmProvider: IChatCompletionProvider,
+  ) {}
 
   classify(question: string): Classification {
     const q = question.toLowerCase();
@@ -110,15 +119,15 @@ export class QuestionRouter {
   }
 
   /**
-   * Why does this throw NotImplementedError for Hybrid/Semantic instead
-   * of silently falling back to something else?
-   *
-   * This task deliberately scopes to Pure Graph and Intelligence only -
-   * Hybrid and Pure Semantic need RetrievalService and LLM streaming
-   * integration, which is Task 6's job, sequenced alongside the
-   * inferred extraction tier Hybrid questions benefit most from. A
-   * clear 501 here is the honest signal that this category genuinely
-   * isn't built yet, not a silent wrong answer or a crash.
+   * Scoped to Pure Graph and Intelligence only - both complete
+   * synchronously with no LLM involvement, matching the frozen design's
+   * interaction model ("Pure Graph and Intelligence answers return
+   * instantly as structured data... no streaming affordance needed").
+   * Hybrid and Pure Semantic questions are handled by streamAsk()
+   * instead, not by this method with a fallback - the caller (the route
+   * handler) classifies the question first to decide which method to
+   * call and, just as importantly, which HTTP response shape to send
+   * (plain JSON here, an SSE stream there) before either method runs.
    */
   async ask(graph: GraphInput, params: RouterAskParams): Promise<RouterAnswer> {
     const classification = this.classify(params.question);
@@ -143,8 +152,83 @@ export class QuestionRouter {
       return { category: classification.category, algorithm: classification.algorithmName, result };
     }
 
+    // Defensive - the route is expected to classify first and call
+    // streamAsk() for these categories instead, but a direct or
+    // misrouted call to ask() for a Hybrid/Semantic question fails
+    // loudly and specifically here, rather than silently returning
+    // something misleading.
     throw new NotImplementedError(
-      `Questions requiring ${classification.category === 'hybrid' ? 'explanation combined with graph facts' : 'semantic search'} are not yet supported - only Pure Graph and Intelligence questions are answerable today.`,
+      `Questions classified as "${classification.category}" are answered by streamAsk(), not ask() - this method is scoped to Pure Graph and Intelligence questions only.`,
     );
+  }
+
+  /**
+   * Handles Hybrid and Pure Semantic questions - the two categories
+   * that genuinely need the LLM. Yields a discriminated union of
+   * events so a caller can distinguish "here's a token to append" from
+   * "the stream is finished" without needing a separate sentinel value.
+   *
+   * Why does this accept `repositoryId` when `ask()` doesn't need it?
+   *
+   * RetrievalService's real semantic search is scoped to a specific
+   * repository's chunks - Pure Graph/Intelligence never touch
+   * RetrievalService at all, so `ask()` never needed this.
+   *
+   * Why is graph-fact gathering for Hybrid questions wrapped in its own
+   * try/catch, silently proceeding without those facts on failure,
+   * rather than failing the whole question?
+   *
+   * Graph facts are a genuine enrichment for a Hybrid answer, but the
+   * semantic explanation is still meaningful without them - the same
+   * "a separate, additive feature failing shouldn't take down the
+   * primary goal" philosophy already established for graph generation
+   * itself (Task 3) and the inferred extraction tier (this task, Part
+   * A), applied here at query time instead of generation time.
+   */
+  async *streamAsk(
+    repositoryId: string,
+    graph: GraphInput,
+    category: 'hybrid' | 'pure_semantic',
+    params: RouterAskParams,
+  ): AsyncGenerator<RouterStreamEvent, void, unknown> {
+    const graphFacts: GraphFact[] = [];
+
+    if (category === 'hybrid' && params.nodeId) {
+      try {
+        const direct = this.aie.run('dependency-analysis', graph, {
+          nodeId: params.nodeId,
+          direction: 'both',
+          mode: 'direct',
+        }) as { nodeIds: string[] };
+        graphFacts.push({ label: `Direct dependencies/dependents of ${params.nodeId}`, nodeIds: direct.nodeIds });
+
+        if (params.targetNodeId) {
+          const path = this.aie.run('dependency-analysis', graph, {
+            mode: 'path',
+            from: params.nodeId,
+            to: params.targetNodeId,
+          }) as { path: string[] | null };
+          graphFacts.push({
+            label: `Dependency path from ${params.nodeId} to ${params.targetNodeId}`,
+            nodeIds: path.path ?? [],
+          });
+        }
+      } catch {
+        // Best-effort enrichment - proceed without graph facts rather
+        // than fail the whole question over them.
+      }
+    }
+
+    const retrievedChunks = await this.retrievalService.retrieve(repositoryId, params.question);
+    const systemPrompt = buildGraphAugmentedPrompt(retrievedChunks, graphFacts);
+
+    for await (const token of this.llmProvider.streamCompletion({
+      systemPrompt,
+      messages: [{ role: 'user', content: params.question }],
+    })) {
+      yield { type: 'token', text: token };
+    }
+
+    yield { type: 'done' };
   }
 }
