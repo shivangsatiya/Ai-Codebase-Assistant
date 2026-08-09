@@ -1,10 +1,95 @@
 import { useParams } from 'react-router-dom';
+import { useMemo } from 'react';
 import { useRepository } from '../../hooks/use-repositories';
+import { useRepositoryGraph } from '../../hooks/use-graph';
+import { useGraphUiStore } from '../../stores/graph-ui-store';
+import { adaptGraph } from '../../lib/graph-adapter';
+import { computeNodeRelationships } from '../../lib/graph-relationships';
 import { Skeleton } from '../ui/skeleton';
 
 export function Inspector() {
   const { repositoryId } = useParams<{ repositoryId?: string }>();
   const { data: repository, isLoading, isError } = useRepository(repositoryId);
+  const { data: graphResponse } = useRepositoryGraph(repositoryId);
+  const selectedNodeId = useGraphUiStore((s) => s.selectedNodeId);
+  const selectNode = useGraphUiStore((s) => s.selectNode);
+
+  const adapted = useMemo(
+    () => adaptGraph(graphResponse?.nodes ?? [], graphResponse?.edges ?? []),
+    [graphResponse],
+  );
+
+  const selectedNode = selectedNodeId ? adapted.nodes.find((n) => n.id === selectedNodeId) : undefined;
+
+  if (selectedNode) {
+    const relationships = computeNodeRelationships(selectedNode.id, adapted.edges);
+    const incoming = adapted.edges.filter((e) => e.target === selectedNode.id);
+    const outgoing = adapted.edges.filter((e) => e.source === selectedNode.id);
+    const nodeById = new Map(adapted.nodes.map((n) => [n.id, n]));
+
+    return (
+      <aside className="flex h-full w-80 flex-col gap-3 overflow-y-auto border-l border-border bg-surface p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate font-mono text-sm font-medium text-fg">{selectedNode.data.label}</p>
+            <p className="text-xs text-fg-subtle">{selectedNode.data.nodeType}</p>
+          </div>
+          <button
+            onClick={() => selectNode(null)}
+            aria-label="Deselect node, return to repository overview"
+            className="shrink-0 text-xs text-fg-muted hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+
+        {selectedNode.data.filePath && (
+          <p className="truncate font-mono text-xs text-fg-subtle">{selectedNode.data.filePath}</p>
+        )}
+
+        <div className="flex flex-col gap-1 text-xs text-fg-muted">
+          <div className="flex justify-between">
+            <span>Certainty</span>
+            <span className={selectedNode.data.certainty === 'inferred' ? 'text-inferred' : 'text-deterministic'}>
+              {selectedNode.data.certainty}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>Verified</span>
+            <span className="text-fg">{selectedNode.data.verified ? 'Yes' : 'No'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Source</span>
+            <span className="truncate pl-2 text-fg">{selectedNode.data.provenanceSource}</span>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1 text-xs font-medium text-fg-muted">Incoming ({relationships.incomingCount})</p>
+          <ul className="flex flex-col gap-0.5">
+            {incoming.slice(0, 8).map((edge) => (
+              <li key={edge.id} className="truncate font-mono text-xs text-fg-subtle">
+                {nodeById.get(edge.source)?.data.label ?? edge.source}
+                <span className="text-fg-subtle/60"> · {edge.data?.edgeType}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <p className="mb-1 text-xs font-medium text-fg-muted">Outgoing ({relationships.outgoingCount})</p>
+          <ul className="flex flex-col gap-0.5">
+            {outgoing.slice(0, 8).map((edge) => (
+              <li key={edge.id} className="truncate font-mono text-xs text-fg-subtle">
+                {nodeById.get(edge.target)?.data.label ?? edge.target}
+                <span className="text-fg-subtle/60"> · {edge.data?.edgeType}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
+    );
+  }
 
   if (!repositoryId) {
     return (
@@ -54,9 +139,7 @@ export function Inspector() {
         )}
       </div>
 
-      <p className="mt-auto text-xs text-fg-subtle">
-        Full architecture metrics and node inspection will appear here once the knowledge graph view is built.
-      </p>
+      <p className="mt-auto text-xs text-fg-subtle">Select a node in the graph to inspect it.</p>
     </aside>
   );
 }

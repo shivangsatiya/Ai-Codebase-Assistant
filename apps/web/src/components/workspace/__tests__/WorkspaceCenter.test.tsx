@@ -35,7 +35,13 @@ describe('WorkspaceCenter', () => {
 
     renderWithProviders(<WorkspaceCenter />, { route: '/workspace/repo-1', path: '/workspace/:repositoryId?' });
 
-    await waitFor(() => expect(screen.getByText(/knowledge graph.*will appear here/i)).toBeInTheDocument());
+    // WorkspaceCenter's own responsibility for the ready case is the
+    // identifying header (section 18) - the graph itself is rendered by
+    // RepositoryGraph, which has its own comprehensive, dedicated test
+    // suite (RepositoryGraph.test.tsx) covering loading/error/empty/
+    // success/selection/hover in depth; re-testing all of that here
+    // through WorkspaceCenter would be redundant, not more thorough.
+    await waitFor(() => expect(screen.getByText('a/b')).toBeInTheDocument());
   });
 
   it('shows a clear, honest "not found" message for an unknown or not-owned repository - the backend is the authority, this never guesses which case it is', async () => {
