@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/**
+ * Why a two-color certainty system (deterministic/inferred) instead of
+ * one arbitrary accent color?
+ *
+ * The frozen backend design's central distinction - certainty,
+ * "structural trustworthiness never implies semantic correctness" - is
+ * the single most important thing this interface needs to communicate
+ * honestly and consistently. Rather than a decorative accent color with
+ * no informational meaning, these two colors ARE the meaning: cyan for
+ * deterministic (precise, computed, certain), amber for inferred
+ * (best-effort, worth a second look). They appear identically on graph
+ * nodes, inspector badges, and search results - one visual grammar,
+ * used everywhere the distinction matters, not decoration repeated by
+ * habit.
+ *
+ * Why a near-black background rather than pure black, and why JetBrains
+ * Mono given real prominence rather than confined to rare code blocks?
+ *
+ * Pure black paired with one bright accent is exactly the generic
+ * AI-generated dark-theme look this project's own design guidance warns
+ * against. A very-dark, slightly cool-tinted base (matching how Linear
+ * and Vercel actually build their dark themes, not an arbitrary guess)
+ * paired with a MEANINGFUL two-color system avoids that. JetBrains Mono
+ * used prominently for file paths, node ids, and commit SHAs throughout
+ * the UI - not just inside code blocks - is the second grounding
+ * choice: this is a tool for exploring source code architecture, so its
+ * own vernacular should look like one, not like a generic SaaS
+ * dashboard wearing a dark theme.
+ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-bg: #0b0d10;
+  --color-surface: #131620;
+  --color-surface-elevated: #1b1f2c;
+  --color-border: #262b3a;
+
+  --color-fg: #e4e7ec;
+  --color-fg-muted: #8b92a5;
+  --color-fg-subtle: #565d70;
+
+  --color-deterministic: #4fd1e8;
+  --color-deterministic-muted: #2a4a52;
+  --color-inferred: #f0a857;
+  --color-inferred-muted: #4a3a24;
+
+  --color-accent: #7c6fe8;
+  --color-accent-muted: #332e5c;
+
+  --color-danger: #f0637a;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

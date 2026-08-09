@@ -8,6 +8,9 @@
     "dev:api": "npm run dev --workspace=apps/api",
     "test:api": "npm run test --workspace=apps/api",
     "lint:api": "npm run lint --workspace=apps/api",
-    "build:api": "npm run build --workspace=apps/api"
+    "build:api": "npm run build --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "test:web": "npm run test --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web"
   }
 }
