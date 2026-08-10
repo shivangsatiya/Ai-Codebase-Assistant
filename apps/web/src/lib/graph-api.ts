@@ -53,6 +53,13 @@ export async function getRepositoryGraph(repositoryId: string): Promise<GraphRes
  * while forbidding the frontend from computing it itself; this is that
  * exact boundary, not a loophole around it.
  */
+/** Matches DependencyAnalysisResult exactly - used to format pure_graph JSON answers returned from /graph/ask. */
+export interface DependencyAnalysisResult {
+  mode: string;
+  nodeIds: string[];
+  path?: string[] | null;
+}
+
 export async function getCycles(repositoryId: string): Promise<CycleDetectionResult> {
   const result = await apiRequest<{ algorithm: string; result: CycleDetectionResult }>(
     `/api/repositories/${repositoryId}/graph/analysis/cycle-detection`,

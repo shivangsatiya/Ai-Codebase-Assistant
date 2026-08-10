@@ -3,9 +3,11 @@ import { useMemo } from 'react';
 import { useRepository } from '../../hooks/use-repositories';
 import { useRepositoryGraph } from '../../hooks/use-graph';
 import { useGraphUiStore } from '../../stores/graph-ui-store';
+import { useAskQuestion } from '../../hooks/use-ask-question';
 import { adaptGraph } from '../../lib/graph-adapter';
 import { computeNodeRelationships } from '../../lib/graph-relationships';
 import { Skeleton } from '../ui/skeleton';
+import { NodeQuestionPanel } from '../graph/NodeQuestionPanel';
 
 export function Inspector() {
   const { repositoryId } = useParams<{ repositoryId?: string }>();
@@ -19,7 +21,21 @@ export function Inspector() {
     [graphResponse],
   );
 
+  const labelById = useMemo(() => new Map(adapted.nodes.map((n) => [n.id, n.data.label])), [adapted.nodes]);
+
   const selectedNode = selectedNodeId ? adapted.nodes.find((n) => n.id === selectedNodeId) : undefined;
+
+  // The orchestrator hook is called unconditionally (React hooks rule)
+  // with a safe empty-string fallback for repositoryId - the question
+  // panel itself is only ever rendered below when both a real
+  // repositoryId and a real selectedNode exist, so `ask` is never
+  // actually invoked with the fallback value.
+  const { history, ask, isAsking, cancel, clearHistory } = useAskQuestion(
+    repositoryId ?? '',
+    selectedNodeId ?? '',
+    adapted.edges,
+    labelById,
+  );
 
   if (selectedNode) {
     const relationships = computeNodeRelationships(selectedNode.id, adapted.edges);
@@ -87,6 +103,18 @@ export function Inspector() {
             ))}
           </ul>
         </div>
+
+        {repositoryId && (
+          <NodeQuestionPanel
+            key={selectedNode.id}
+            nodeType={selectedNode.data.nodeType}
+            history={history}
+            isAsking={isAsking}
+            onAsk={ask}
+            onCancel={cancel}
+            onClearHistory={clearHistory}
+          />
+        )}
       </aside>
     );
   }
