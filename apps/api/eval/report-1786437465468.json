@@ -1,0 +1,348 @@
+{
+  "runAt": "2026-08-11T08:37:45.466Z",
+  "totalQuestions": 22,
+  "routingAccuracy": 1,
+  "confusionMatrix": {
+    "pure_graph": {
+      "pure_graph": 9
+    },
+    "intelligence": {
+      "intelligence": 4
+    },
+    "hybrid": {
+      "hybrid": 9
+    }
+  },
+  "perCategoryAccuracy": {
+    "pure_graph": {
+      "correct": 9,
+      "total": 9,
+      "accuracy": 1
+    },
+    "intelligence": {
+      "correct": 4,
+      "total": 4,
+      "accuracy": 1
+    },
+    "hybrid": {
+      "correct": 9,
+      "total": 9,
+      "accuracy": 1
+    }
+  },
+  "entityRecall": {
+    "averageRecall": 0.375,
+    "questionsWithEntities": 8
+  },
+  "results": [
+    {
+      "questionId": "K1",
+      "repositoryName": "lukeed/klona",
+      "questionText": "What does this package depend on?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"folder:bench\",\"file:index.d.ts\",\"file:package.json\",\"file:readme.md\",\"folder:src\",\"folder:test\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 91
+    },
+    {
+      "questionId": "K2",
+      "repositoryName": "lukeed/klona",
+      "questionText": "Does this codebase contain any circular dependencies?",
+      "expectedCategory": "intelligence",
+      "actualCategory": "intelligence",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"cycles\":[],\"cycleCount\":0}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 89
+    },
+    {
+      "questionId": "K3",
+      "repositoryName": "lukeed/klona",
+      "questionText": "Why does this package need any dependencies at all?",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "The package itself, as seen in [src/lite.js:1-51](src/lite.js:1-51), does not require any dependencies to function, as it only uses built-in JavaScript functionality. However, the package does include a benchmarking suite in [bench/package.json:1-14](bench/package.json:1-14) which lists several dependencies, including \"benchmark\", \"clone\", \"clone-deep\", \"deep-copy\", \"deepcopy\", \"klona\", \"lodash\", and \"rfdc\". These dependencies are used for testing and comparing the performance of the package against other similar packages.",
+      "entitiesFound": [
+        "klona",
+        "clon"
+      ],
+      "entitiesMissing": [],
+      "latencyMs": 9199
+    },
+    {
+      "questionId": "K4",
+      "repositoryName": "lukeed/klona",
+      "questionText": "Explain what this repository does.",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "This repository, named \"klona\", provides a tiny and fast utility to \"deep clone\" various JavaScript data types, including Objects, Arrays, Dates, RegExps, Maps, Sets, and more [package.json:5-6]. \n\nThe repository offers different versions of the cloning utility, including \"klona\", \"klona/lite\", \"klona/json\", and \"klona/full\", each with varying levels of support for different data types and features [readme.md:71-110, package.json:23-40]. \n\nFor example, \"klona/lite\" adds support for RegExp, Date, and undefined values [readme.md:141-180], while \"klona/full\" extends \"klona\" with support for Symbol properties and non-enumerable properties [readme.md:71-110]. \n\nThe repository also includes benchmarks to compare the performance of the different cloning utilities with other popular libraries, such as lodash and clone [readme.md:141-180, bench/package.json:1-14]. \n\nAdditionally, the repository provides tests to ensure the correctness of the cloning utilities, including tests for cloning classes, Maps, and other data types [test/suites/class.js:100-114, test/suites/map.js:1-40]. \n\nOverall, this repository provides a lightweight and efficient solution for deep cloning various JavaScript data types, with different versions offering varying levels of support and features.",
+      "entitiesFound": [
+        "clon",
+        "deep"
+      ],
+      "entitiesMissing": [],
+      "latencyMs": 14486
+    },
+    {
+      "questionId": "K5",
+      "repositoryName": "lukeed/klona",
+      "questionText": "What imports the main entry file?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"folder:test/suites\",\"file:test/full.js\",\"file:test/index.js\",\"file:test/json.js\",\"file:test/lite.js\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 153
+    },
+    {
+      "questionId": "K6",
+      "repositoryName": "lukeed/klona",
+      "questionText": "Does this repository use a database?",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "Based on the provided code context, there is no explicit mention of a database being used in this repository [readme.md:1-215], [bench/package.json:1-14], [package.json:1-40], [bench/index.js:116-119]. Therefore, I cannot confirm if a database is used or not.",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 16824
+    },
+    {
+      "questionId": "K7",
+      "repositoryName": "lukeed/klona",
+      "questionText": "What are all the transitive dependencies of this package?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"transitive\",\"nodeIds\":[\"folder:bench\",\"file:index.d.ts\",\"file:package.json\",\"file:readme.md\",\"folder:src\",\"folder:test\",\"folder:bench/fixtures\",\"file:bench/index.js\",\"file:bench/package.json\",\"folder:bench/validate\",\"configuration:package.json\",\"file:src/full.js\",\"file:src/index.js\",\"file:src/json.js\",\"file:src/lite.js\",\"file:test/full.js\",\"file:test/index.js\",\"file:test/json.js\",\"file:test/lite.js\",\"folder:test/suites\",\"file:bench/fixtures/default.js\",\"file:bench/fixtures/full.js\",\"file:bench/fixtures/json.js\",\"file:bench/fixtures/lite.js\",\"function:bench/index.js#runner\",\"package:path\",\"package:benchmark\",\"package:lodash\",\"package:rfdc\",\"package:clone\",\"package:clone-deep\",\"package:deep-copy\",\"package:klona\",\"configuration:bench/package.json\",\"file:bench/validate/default.js\",\"file:bench/validate/full.js\",\"file:bench/validate/json.js\",\"file:bench/validate/lite.js\",\"function:src/full.js#set\",\"function:src/full.js#klona\",\"function:src/index.js#klona\",\"function:src/json.js#klona\",\"function:src/lite.js#klona\",\"file:test/suites/index.js\",\"file:test/suites/api.js\",\"file:test/suites/array.js\",\"file:test/suites/boolean.js\",\"file:test/suites/class.js\",\"file:test/suites/date.js\",\"file:test/suites/descriptor.js\",\"file:test/suites/dictionary.js\",\"file:test/suites/function.js\",\"file:test/suites/map.js\",\"file:test/suites/nullish.js\",\"file:test/suites/number.js\",\"file:test/suites/object.js\",\"file:test/suites/pollution.js\",\"file:test/suites/regexp.js\",\"file:test/suites/set.js\",\"file:test/suites/string.js\",\"file:test/suites/symbol.js\",\"file:test/suites/typedarray.js\",\"method:bench/fixtures/default.js#Test.constructor\",\"method:bench/fixtures/default.js#Test.number\",\"function:bench/fixtures/full.js#get\",\"dbModel:bench/fixtures/json.js\",\"package:assert\",\"package:uvu\",\"class:test/suites/class.js#Foobar\",\"function:test/suites/class.js#Test\",\"function:test/suites/class.js#increment\",\"method:test/suites/class.js#Test.constructor\",\"method:test/suites/class.js#Test.increment\",\"method:test/suites/class.js#Test.val\",\"method:test/suites/class.js#Animal.constructor\",\"method:test/suites/class.js#Animal.carbon\",\"method:test/suites/class.js#Dog.constructor\",\"method:test/suites/class.js#Dog.bark\",\"method:test/suites/class.js#Foobar.constructor\",\"function:test/suites/descriptor.js#get\",\"function:test/suites/object.js#method\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 175
+    },
+    {
+      "questionId": "K8",
+      "repositoryName": "lukeed/klona",
+      "questionText": "How does the cloning algorithm handle arrays versus objects?",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "Based on the provided code context, it appears that the cloning algorithm handles arrays and objects differently. \n\nFor arrays, the code uses methods like `klona(input)` to create a deep copy of the array [test/suites/typedarray.js:36-75]. \n\nFor objects, the algorithm handles nested objects by recursively cloning their properties [test/suites/object.js:1-40], [test/suites/object.js:41-49]. \n\nHowever, the exact implementation details of the cloning algorithm are not provided in the given code context. Therefore, I cannot provide a more specific explanation of how the algorithm handles arrays versus objects.",
+      "entitiesFound": [
+        "array",
+        "object"
+      ],
+      "entitiesMissing": [],
+      "latencyMs": 9962
+    },
+    {
+      "questionId": "K9",
+      "repositoryName": "lukeed/klona",
+      "questionText": "Who depends on the main index file?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"folder:test/suites\",\"file:test/full.js\",\"file:test/index.js\",\"file:test/json.js\",\"file:test/lite.js\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 157
+    },
+    {
+      "questionId": "K10",
+      "repositoryName": "lukeed/klona",
+      "questionText": "Is there a cyclic dependency between any modules in this repository?",
+      "expectedCategory": "intelligence",
+      "actualCategory": "intelligence",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"cycles\":[],\"cycleCount\":0}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 91
+    },
+    {
+      "questionId": "W1",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "What does authRoutes.js depend on?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"package:express\",\"file:server/src/models/User.js\",\"file:server/src/utils/generateToken.js\",\"file:server/src/middleware/auth.js\",\"file:server/src/middleware/asyncHandler.js\",\"file:server/src/middleware/validate.js\",\"file:server/src/validators/authValidators.js\",\"file:server/src/middleware/rateLimiters.js\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 146
+    },
+    {
+      "questionId": "W2",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Who depends on the auth.js middleware?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"folder:server/src/middleware\",\"file:server/src/routes/authRoutes.js\",\"file:server/src/routes/conversationRoutes.js\",\"file:server/src/routes/messageRoutes.js\",\"file:server/src/routes/uploadRoutes.js\",\"file:server/src/routes/userRoutes.js\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 88
+    },
+    {
+      "questionId": "W3",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Does this repository have any circular dependencies?",
+      "expectedCategory": "intelligence",
+      "actualCategory": "intelligence",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"cycles\":[],\"cycleCount\":0}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 127
+    },
+    {
+      "questionId": "W4",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Why does messageRoutes.js depend on messageValidators.js?",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "",
+      "entitiesFound": [],
+      "entitiesMissing": [
+        "validat",
+        "message"
+      ],
+      "latencyMs": 293
+    },
+    {
+      "questionId": "W5",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Explain what the socketHandler.js file does.",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "",
+      "entitiesFound": [],
+      "entitiesMissing": [
+        "socket"
+      ],
+      "latencyMs": 207
+    },
+    {
+      "questionId": "W6",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "What imports the User.js model?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"folder:server/src/models\",\"file:server/src/middleware/auth.js\",\"file:server/src/routes/authRoutes.js\",\"file:server/src/routes/userRoutes.js\",\"file:server/src/sockets/socketHandler.js\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 89
+    },
+    {
+      "questionId": "W7",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "How does the authentication middleware work?",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "",
+      "entitiesFound": [],
+      "entitiesMissing": [
+        "auth",
+        "token"
+      ],
+      "latencyMs": 211
+    },
+    {
+      "questionId": "W8",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "What are the transitive dependencies of messageRoutes.js?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"transitive\",\"nodeIds\":[\"folder:server/src/routes\",\"file:server/src/index.js\",\"package:express\",\"file:server/src/models/Message.js\",\"file:server/src/models/Conversation.js\",\"file:server/src/middleware/auth.js\",\"file:server/src/middleware/asyncHandler.js\",\"file:server/src/middleware/validate.js\",\"file:server/src/validators/messageValidators.js\",\"folder:server/src\",\"file:server/src/routes/authRoutes.js\",\"file:server/src/routes/conversationRoutes.js\",\"file:server/src/routes/uploadRoutes.js\",\"file:server/src/routes/userRoutes.js\",\"package:http\",\"package:cors\",\"package:dotenv\",\"package:helmet\",\"package:mongoose\",\"package:pino-http\",\"package:socket.io\",\"file:server/src/config/db.js\",\"file:server/src/config/logger.js\",\"file:server/src/sockets/socketHandler.js\",\"file:server/src/messageRoutes.js\",\"file:server/tests/authRoutes.test.js\",\"folder:server/src/models\",\"folder:server/src/middleware\",\"package:jsonwebtoken\",\"file:server/src/models/User.js\",\"file:server/tests/middleware.test.js\",\"file:server/src/middleware/ValidationError.js\",\"folder:server/src/validators\",\"package:zod\",\"file:server/tests/validators.test.js\",\"folder:server\",\"folder:server/src/config\",\"file:server/src/package.json\",\"folder:server/src/sockets\",\"folder:server/src/utils\",\"file:server/src/utils/generateToken.js\",\"file:server/src/validators/authValidators.js\",\"file:server/src/middleware/rateLimiters.js\",\"file:server/src/validators/conversationValidators.js\",\"package:multer\",\"file:server/src/config/cloudinary.js\",\"file:server/src/validators/userValidators.js\",\"configuration:server/src/config/db.js\",\"package:pino\",\"configuration:server/src/config/logger.js\",\"file:server/src/sockets/isParticipant.js\",\"folder:server/tests\",\"package:vitest\",\"package:supertest\",\"package:bcryptjs\",\"method:server/src/middleware/ValidationError.js#ValidationError.constructor\",\"repository:6a7ade826b5bd73f11d5ea96\",\"file:server/package-lock.json\",\"file:server/package.json\",\"package:express-rate-limit\",\"package:cloudinary\",\"configuration:server/src/config/cloudinary.js\",\"file:server/tests/isParticipant.test.js\",\"file:API_DOCUMENTATION.md\",\"folder:client\",\"file:ENGINEERING_REVIEW_AND_ROADMAP.md\",\"file:INTERVIEW_GUIDE.md\",\"file:package-lock.json\",\"file:README.md\",\"configuration:server/package.json\",\"file:client/package-lock.json\",\"file:client/package.json\",\"folder:client/src\",\"file:client/vite.config.js\",\"configuration:package-lock.json\",\"configuration:client/package.json\",\"folder:client/src/api\",\"file:client/src/App.jsx\",\"folder:client/src/components\",\"folder:client/src/context\",\"file:client/src/main.jsx\",\"folder:client/src/pages\",\"folder:client/src/utils\",\"package:vite\",\"package:@vitejs/plugin-react\",\"configuration:client/vite.config.js\",\"file:client/src/api/axios.js\",\"function:client/src/App.jsx#App\",\"package:react-router-dom\",\"file:client/src/context/AuthContext.jsx\",\"file:client/src/context/SocketContext.jsx\",\"file:client/src/pages/Login.jsx\",\"file:client/src/pages/Register.jsx\",\"file:client/src/pages/Chat.jsx\",\"file:client/src/components/ChatWindow.jsx\",\"file:client/src/components/MessageBubble.jsx\",\"file:client/src/components/MessageInput.jsx\",\"file:client/src/components/NewChatModal.jsx\",\"file:client/src/components/PresenceDot.jsx\",\"file:client/src/components/Sidebar.jsx\",\"file:client/src/components/TypingIndicator.jsx\",\"package:react\",\"package:react-dom\",\"package:bootstrap\",\"package:bootstrap-icons\",\"file:client/src/utils/sound.js\",\"package:axios\",\"service:client/src/api/axios.js\",\"configuration:client/src/api/axios.js\",\"authComponent:client/src/api/axios.js\",\"authComponent:client/src/context/AuthContext.jsx\",\"package:socket.io-client\",\"authComponent:client/src/pages/Login.jsx\",\"authComponent:client/src/pages/Register.jsx\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 109
+    },
+    {
+      "questionId": "W9",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Where is rate limiting implemented in this codebase?",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "",
+      "entitiesFound": [],
+      "entitiesMissing": [
+        "rateLimit",
+        "limit"
+      ],
+      "latencyMs": 215
+    },
+    {
+      "questionId": "W10",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Explain how error handling works in this application.",
+      "expectedCategory": "hybrid",
+      "actualCategory": "hybrid",
+      "categoryCorrect": true,
+      "responseMode": "stream",
+      "answerText": "",
+      "entitiesFound": [],
+      "entitiesMissing": [
+        "error",
+        "asyncHandler"
+      ],
+      "latencyMs": 288
+    },
+    {
+      "questionId": "W11",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Does Conversation.js import Message.js?",
+      "expectedCategory": "pure_graph",
+      "actualCategory": "pure_graph",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"mode\":\"direct\",\"nodeIds\":[\"folder:server/src/models\",\"package:mongoose\",\"file:server/src/routes/conversationRoutes.js\",\"file:server/src/routes/messageRoutes.js\",\"file:server/src/sockets/socketHandler.js\"]}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 102
+    },
+    {
+      "questionId": "W12",
+      "repositoryName": "shivangsatiya/Realtime-Chat-App",
+      "questionText": "Is there a cycle between conversationRoutes.js and its dependencies?",
+      "expectedCategory": "intelligence",
+      "actualCategory": "intelligence",
+      "categoryCorrect": true,
+      "responseMode": "json",
+      "answerText": "{\"cycles\":[],\"cycleCount\":0}",
+      "entitiesFound": [],
+      "entitiesMissing": [],
+      "latencyMs": 90
+    }
+  ]
+}

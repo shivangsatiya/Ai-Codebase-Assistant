@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "jest --runInBand",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "eval": "ts-node --transpile-only eval/run-evaluation.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "4.2.0",
