@@ -97,6 +97,8 @@ function AnswerEntry({ answer }: { answer: ArchitectureAnswer }) {
 
   return (
     <div
+      data-testid="answer-entry"
+      data-status={answer.status}
       className="flex flex-col gap-1 rounded-md border border-border bg-surface-elevated p-2 text-xs"
       role="group"
       aria-label={`Question: ${answer.question}`}

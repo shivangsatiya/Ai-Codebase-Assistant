@@ -32,7 +32,7 @@ BASE_URL=https://ai-codebase-assistant-api.onrender.com npm run eval
 
 No special environment variables are required beyond BASE_URL (defaults to http://localhost:4000) - the script registers its own disposable account per run, so it doesn't depend on any pre-existing credentials.
 
-Expect this to take several minutes. If either repository isn't already imported under the account the script creates, it will import fresh and poll for readiness (up to 5 minutes per repository) - import time itself has never been measured in this project (see the Milestone 3 retrospective's Performance section), so this is genuinely unknown in advance.
+Expect this to take several minutes. If either repository isn't already imported under the account the script creates, it will import fresh and poll for readiness (up to 10 minutes per repository). A real, measured data point: a live run against Realtime-Chat-App (56 files) took 330 seconds total to import - 156s embedding, 167s graph generation (dominated by 56 sequential, per-file Groq calls for inferred-tier classification, more expensive than embedding itself). This is the first real import-time measurement taken anywhere in this project (see the Milestone 3 retrospective's Performance section, which explicitly noted this had never been measured) - worth carrying into Milestone 4 Task 5's performance benchmark rather than treated as a one-off.
 
 ## Reading the output
 

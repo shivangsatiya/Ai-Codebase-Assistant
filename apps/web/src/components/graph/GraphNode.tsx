@@ -47,6 +47,7 @@ function GraphNodeComponent({ data, selected }: NodeProps<GraphNodeData>) {
 
   return (
     <div
+      data-testid="graph-node"
       className={cn(
         'flex w-[180px] items-center gap-2 rounded-md border bg-surface-elevated px-3 py-2 text-xs',
         selected ? 'border-accent ring-2 ring-accent/40' : 'border-border',

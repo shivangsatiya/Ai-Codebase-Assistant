@@ -31,6 +31,7 @@ export function RepositoryListItem({ repository, isSelected }: RepositoryListIte
   return (
     <Link
       to={`/workspace/${repository.repositoryId}`}
+      data-testid="repository-list-item"
       className={cn(
         'flex flex-col gap-1 rounded-md border px-3 py-2 text-sm transition-colors',
         isSelected

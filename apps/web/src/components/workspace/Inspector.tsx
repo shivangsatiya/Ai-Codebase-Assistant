@@ -44,7 +44,7 @@ export function Inspector() {
     const nodeById = new Map(adapted.nodes.map((n) => [n.id, n]));
 
     return (
-      <aside className="flex h-full w-80 flex-col gap-3 overflow-y-auto border-l border-border bg-surface p-4">
+      <aside data-testid="inspector-panel" className="flex h-full w-80 flex-col gap-3 overflow-y-auto border-l border-border bg-surface p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate font-mono text-sm font-medium text-fg">{selectedNode.data.label}</p>

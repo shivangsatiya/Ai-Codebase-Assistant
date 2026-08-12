@@ -9,8 +9,8 @@ const EXTERNAL_PACKAGES_CONTAINER_ID = '__external_packages__';
 
 interface ElkTreeNode {
   id: string;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   children?: ElkTreeNode[];
   layoutOptions?: Record<string, string>;
 }
@@ -21,6 +21,22 @@ interface ElkLayoutResultNode {
   y?: number;
   children?: ElkLayoutResultNode[];
 }
+
+/**
+ * Which node types the React Flow renderer actually draws as an
+ * expandable container versus a fixed-size flat card - checked
+ * directly against GraphNode.tsx before writing this, not assumed.
+ * GraphNode renders every single node type identically: a fixed
+ * 180x56 card. Nothing in the current renderer draws a folder or file
+ * as a larger box with other nodes visually inside it. `repository`
+ * and `folder` are still given true ELK nesting below, but only
+ * because their own direct children are themselves independently
+ * rendered flat cards positioned near them - not because the renderer
+ * draws them as literal containers either. Every other type (file,
+ * function, class, interface, method, package, and every inferred
+ * type) must never receive ELK `children` of its own.
+ */
+const CONTAINER_NODE_TYPES = new Set(['repository', 'folder']);
 
 /**
  * Why only `contains` edges drive the layout - restated, still true:
@@ -58,10 +74,32 @@ interface ElkLayoutResultNode {
  * approach, so loose package references get a compact cluster instead
  * of either crashing the single-root assumption or reverting to a flat
  * layout for the entire graph because of them.
+ *
+ * Why does a file/symbol level ("depth > 0, not a container type")
+ * never get ELK `children`, no matter how many symbols it contains?
+ *
+ * A real, live E2E test run against sindresorhus/is-fullwidth-code-point
+ * found a genuine bug here: a file with one nested function was
+ * rendered with the function's card visually overlapping the file's
+ * own card. Traced to its actual root cause (not assumed): ELK's
+ * compound-node layout computed a correctly *expanded* internal
+ * container for the file to make room for its child - but
+ * GraphNode.tsx never renders an expanded container; every node is
+ * always the same fixed 180x56 flat card, so the child ended up
+ * positioned "inside" a box that only existed in ELK's own math, never
+ * on screen. The layout model and the rendering model must agree - so
+ * a non-container node's own `contains`-descendants (its symbols, and
+ * their own descendants if any) are promoted to be flat siblings under
+ * the nearest genuine container ancestor instead of nested inside it.
+ * The containment relationship itself is preserved and still fully
+ * visible - through the real `contains` edge connecting the file to
+ * each of its symbols - only the *visual layout* stops pretending the
+ * file is a container it was never actually rendered as.
  */
 function buildContainmentTree(nodes: FlowNode[], containsEdges: FlowEdge[]): ElkTreeNode[] {
   const childIdsByParent = new Map<string, string[]>();
   const parentIdByChild = new Map<string, string>();
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
   for (const edge of containsEdges) {
     if (!childIdsByParent.has(edge.source)) childIdsByParent.set(edge.source, []);
@@ -69,38 +107,107 @@ function buildContainmentTree(nodes: FlowNode[], containsEdges: FlowEdge[]): Elk
     parentIdByChild.set(edge.target, edge.source);
   }
 
-  function buildNode(id: string, depth: number): ElkTreeNode {
-    const childIds = childIdsByParent.get(id) ?? [];
-    if (childIds.length === 0) {
-      return { id, width: NODE_WIDTH, height: NODE_HEIGHT };
-    }
-    return {
-      id,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-      children: childIds.map((childId) => buildNode(childId, depth + 1)),
-      layoutOptions:
-        depth === 0
-          ? { 'elk.algorithm': 'layered', 'elk.direction': 'DOWN' }
-          : { 'elk.algorithm': 'rectpacking', 'elk.aspectRatio': '0.6' },
-    };
-  }
-
   const allRootIds = nodes.filter((n) => !parentIdByChild.has(n.id)).map((n) => n.id);
   const hierarchyRootId = allRootIds.find((id) => (childIdsByParent.get(id)?.length ?? 0) > 0);
   const standaloneRootIds = allRootIds.filter((id) => id !== hierarchyRootId);
 
+  /**
+   * The hierarchy root is always treated as a genuine container,
+   * regardless of its own declared nodeType - defensive against
+   * silently dropping its entire subtree from the layout if the
+   * backend ever sent unexpected type data for the root specifically,
+   * rather than relying solely on 'repository' being in
+   * CONTAINER_NODE_TYPES matching reality every time.
+   */
+  function isContainerType(id: string): boolean {
+    if (id === hierarchyRootId) return true;
+    const node = nodeById.get(id);
+    return node ? CONTAINER_NODE_TYPES.has(node.data.nodeType) : false;
+  }
+
+  /**
+   * Every `contains`-descendant of a non-container node, flattened -
+   * used when a leaf-like node (a file, say) itself has children (its
+   * symbols) that would otherwise need nesting the UI can't show.
+   */
+  function collectPromotedDescendants(id: string): string[] {
+    const result: string[] = [];
+    for (const childId of childIdsByParent.get(id) ?? []) {
+      result.push(childId);
+      result.push(...collectPromotedDescendants(childId));
+    }
+    return result;
+  }
+
+  /**
+   * The flat list of node IDs that belong as direct ELK children of a
+   * genuine container (repository/folder): its own direct
+   * `contains`-children, with any non-container child's own
+   * descendants promoted up to sit alongside it as siblings, rather
+   * than nested beneath it. A nested folder child keeps its own
+   * children where they are - handled separately, when buildNode
+   * recurses into that folder - since a folder is itself a genuine
+   * container.
+   */
+  function collectFlatChildIds(containerId: string): string[] {
+    const result: string[] = [];
+    for (const childId of childIdsByParent.get(containerId) ?? []) {
+      result.push(childId);
+      if (!isContainerType(childId)) {
+        result.push(...collectPromotedDescendants(childId));
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Returns 1 or 2 ELK tree entries for this node - never nested
+   * `children` directly on the node's own real ID. A leaf-like node
+   * (or a childless container) is just itself, fixed-size. A genuine
+   * container WITH children is split into two separate entries: the
+   * container itself, as a real, fixed-size leaf (since it's a real,
+   * visible, fixed-size card too, not an invisible wrapper) - plus a
+   * synthetic, never-rendered `<id>__children` wrapper holding its
+   * flattened children, positioned near it by the outer rectpacking
+   * pass. The same real pattern already proven correct for
+   * EXTERNAL_PACKAGES_CONTAINER_ID, generalized to every container at
+   * every depth - not just the outermost hierarchy root, since a real
+   * E2E test run found the identical bug recurring for a nested
+   * folder once the root-level case alone was fixed.
+   */
+  function buildNode(id: string): ElkTreeNode[] {
+    if (!isContainerType(id)) {
+      // Even if this node has its own real `contains`-children (a
+      // file with symbols), those are laid out as flat siblings by
+      // this node's own container ancestor (see collectFlatChildIds),
+      // never nested inside this node's own ELK entry.
+      return [{ id, width: NODE_WIDTH, height: NODE_HEIGHT }];
+    }
+
+    const flatChildIds = collectFlatChildIds(id);
+    if (flatChildIds.length === 0) {
+      return [{ id, width: NODE_WIDTH, height: NODE_HEIGHT }];
+    }
+
+    return [
+      { id, width: NODE_WIDTH, height: NODE_HEIGHT },
+      {
+        id: `${id}__children`,
+        children: flatChildIds.flatMap((childId) => buildNode(childId)),
+        layoutOptions: { 'elk.algorithm': 'rectpacking', 'elk.aspectRatio': '0.6' },
+      },
+    ];
+  }
+
   const topLevelNodes: ElkTreeNode[] = [];
 
   if (hierarchyRootId) {
-    topLevelNodes.push(buildNode(hierarchyRootId, 0));
+    topLevelNodes.push(...buildNode(hierarchyRootId));
   }
 
   if (standaloneRootIds.length > 0) {
     topLevelNodes.push({
       id: EXTERNAL_PACKAGES_CONTAINER_ID,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
       children: standaloneRootIds.map((id) => ({ id, width: NODE_WIDTH, height: NODE_HEIGHT })),
       layoutOptions: { 'elk.algorithm': 'rectpacking', 'elk.aspectRatio': '1.6' },
     });
@@ -132,7 +239,10 @@ function flattenToAbsolutePositions(
   for (const node of resultNodes) {
     const absoluteX = offsetX + (node.x ?? 0);
     const absoluteY = offsetY + (node.y ?? 0);
-    if (node.id !== EXTERNAL_PACKAGES_CONTAINER_ID) {
+    // Excludes both EXTERNAL_PACKAGES_CONTAINER_ID and every dynamic
+    // "<realNodeId>__children" synthetic wrapper buildNode generates
+    // for a container - neither is ever a real, rendered node.
+    if (node.id !== EXTERNAL_PACKAGES_CONTAINER_ID && !node.id.endsWith('__children')) {
       positions.set(node.id, { x: absoluteX, y: absoluteY });
     }
     if (node.children) {

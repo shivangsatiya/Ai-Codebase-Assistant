@@ -20,14 +20,16 @@ import * as path from 'path';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:4000';
 const READY_POLL_INTERVAL_MS = 5000;
-const READY_TIMEOUT_MS = 600_000;
 // Was 300_000 (5 minutes) - a guess, made before any real import time
 // had ever been measured in this project. A real run against
 // Realtime-Chat-App (56 files) measured an actual total of 329,941ms -
 // the graph-generation stage alone (56 sequential, per-file Groq calls
 // for inferred-tier classification) took 166,885ms, more than the
 // embedding stage itself. 600 seconds gives real margin above a real,
-// measured number, not another guess.
+// measured number, not another guess - and this number is itself worth
+// carrying into Milestone 4 Task 5's performance benchmark rather than
+// discarded once the immediate timeout issue is fixed.
+const READY_TIMEOUT_MS = 600_000;
 
 interface AuthTokens {
   accessToken: string;

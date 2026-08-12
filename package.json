@@ -9,8 +9,12 @@
     "test:api": "npm run test --workspace=apps/api",
     "lint:api": "npm run lint --workspace=apps/api",
     "build:api": "npm run build --workspace=apps/api",
+    "start:api": "npm run start --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "test:web": "npm run test --workspace=apps/web",
-    "build:web": "npm run build --workspace=apps/web"
+    "lint:web": "npm run lint --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web",
+    "test:e2e": "npm run test:e2e --workspace=apps/web",
+    "test:e2e:typecheck": "npm run test:e2e:typecheck --workspace=apps/web"
   }
 }

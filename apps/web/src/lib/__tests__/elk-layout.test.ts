@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { layoutWithElk } from '../elk-layout';
 import type { FlowNode, FlowEdge } from '../graph-adapter';
 
-function makeNode(id: string): FlowNode {
+function makeNode(id: string, nodeType: string = 'file'): FlowNode {
   return {
     id,
     type: 'graphNode',
     position: { x: 0, y: 0 },
     data: {
       label: id,
-      nodeType: 'file',
+      nodeType,
       filePath: null,
       certainty: 'deterministic',
       verified: false,
@@ -31,11 +31,11 @@ describe('layoutWithElk', () => {
 
   it('positions every node, including deeply nested ones, with real (non-zero, non-overlapping) absolute coordinates', async () => {
     const nodes = [
-      makeNode('repo'),
-      makeNode('folder-a'),
-      makeNode('file-a1'),
-      makeNode('folder-b'),
-      makeNode('file-b1'),
+      makeNode('repo', 'repository'),
+      makeNode('folder-a', 'folder'),
+      makeNode('file-a1', 'file'),
+      makeNode('folder-b', 'folder'),
+      makeNode('file-b1', 'file'),
     ];
     const edges = [
       makeContainsEdge('repo', 'folder-a'),
@@ -59,7 +59,7 @@ describe('layoutWithElk', () => {
   });
 
   it('falls back to a flat layered pass, rather than guessing, if the containment data implies more than one root - defensive against malformed data', async () => {
-    const nodes = [makeNode('root-1'), makeNode('root-2'), makeNode('child-1')];
+    const nodes = [makeNode('root-1', 'repository'), makeNode('root-2', 'package'), makeNode('child-1', 'file')];
     const edges = [makeContainsEdge('root-1', 'child-1')];
 
     const result = await layoutWithElk(nodes, edges);
