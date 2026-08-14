@@ -82,6 +82,25 @@ const envSchema = z.object({
   // Repo-size ceiling (non-functional requirement: reject oversized repos
   // rather than let an import silently run for an hour or exhaust memory).
   MAX_REPO_FILES: z.coerce.number().int().positive().default(3000),
+  /**
+   * How long a job may sit unchanged in a non-terminal stage (or in a
+   * retryable failure) before the sweep considers it eligible for
+   * recovery. Default: 10 minutes - a deliberately generous multiple
+   * of the worst real, MEASURED stage duration in this project
+   * (embedding alone took ~156s for a real 56-file repository,
+   * Milestone 4 Task 1's own finding), not a guess. Generous enough to
+   * avoid claiming a job that's simply still legitimately working on a
+   * larger-than-usual repository.
+   */
+  STALE_JOB_THRESHOLD_MS: z.coerce.number().int().positive().default(600_000),
+  /**
+   * How often the sweep checks for stale/retryable jobs at all.
+   * Default: 60 seconds - frequent enough that a genuinely stuck job
+   * is recovered reasonably soon after crossing the staleness
+   * threshold, without hammering the database with a query every few
+   * seconds.
+   */
+  STALE_JOB_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   MAX_FILE_SIZE_KB: z.coerce.number().int().positive().default(500),
 });
 

@@ -37,12 +37,21 @@ const ANNOTATION_SYSTEM_PROMPT = [
  * A single-file classification is a small, simple JSON shape - reliable
  * to parse. Asking for a JSON ARRAY covering several files in one
  * response is more failure-prone (one malformed entry can corrupt
- * parsing for every file in that batch) for a modest cost saving that
- * doesn't matter much at this project's actual scale
- * (MAX_REPO_FILES=15, so at most 15 calls). Worth being honest that
- * this genuinely would NOT scale to a real large repository - batching
- * would become necessary there, a real limitation this project doesn't
- * need to solve at its current constrained scale.
+ * parsing for every file in that batch) for a modest cost saving.
+ *
+ * A real, confirmed limitation, updated here during Milestone 4 Task 5's
+ * own benchmark work: this comment previously cited MAX_REPO_FILES=15 as
+ * the reason batching wasn't worth the complexity - a genuinely stale
+ * number, confirmed directly during Task 5's own inspection step to
+ * actually be 3000. At that real scale, one-call-per-file is a real,
+ * measured bottleneck, not a theoretical one - a repository near that
+ * ceiling makes thousands of individual LLM calls, and this project's
+ * free-tier Groq quota (100,000 tokens/day) is nowhere near enough to
+ * complete inferred extraction for a repository that size in one run.
+ * Batching would be the real fix, but implementing it is explicitly out
+ * of scope for a measurement-only task - this comment update, and the
+ * quota-exhaustion tracking below, exist to make that real constraint
+ * visible and honestly measured, not to solve it here.
  */
 export class InferredAnnotationExtractor {
   constructor(private readonly llmProvider: IChatCompletionProvider) {}
@@ -51,17 +60,57 @@ export class InferredAnnotationExtractor {
     const nodes: CandidateNode[] = [];
     const edges: CandidateEdge[] = [];
 
-    for (const file of files) {
-      const annotation = await this.classifyFile(file);
-      if (!annotation) continue; // LLM call failed or returned unparseable output - skip honestly, never guess
+    // Milestone 4 Task 5 - measurement only, no change to the existing
+    // per-file, no-retry, graceful-skip behavior itself (explicit
+    // instruction: preserve it exactly, just measure it honestly).
+    // Distinguishes quota exhaustion (a real, typed 429 from Groq's own
+    // SDK - see groq-chat.client.ts, which lets this genuine error
+    // surface rather than swallowing it as a generic failure) from every
+    // other kind of inferred-extraction failure, since the two mean
+    // genuinely different things for a capacity report: one is "the free
+    // tier's real ceiling," the other is "something else went wrong."
+    let succeededCount = 0;
+    let quotaExhaustedCount = 0;
+    let otherFailureCount = 0;
+    let firstQuotaExhaustedAtFile: string | null = null;
 
-      this.addNodesForAnnotation(file, annotation, nodes, edges);
+    for (const file of files) {
+      const outcome = await this.classifyFile(file);
+      if (outcome.result) {
+        succeededCount++;
+        this.addNodesForAnnotation(file, outcome.result, nodes, edges);
+      } else if (outcome.failureReason === 'quota_exhausted') {
+        quotaExhaustedCount++;
+        if (firstQuotaExhaustedAtFile === null) {
+          firstQuotaExhaustedAtFile = file.relativePath;
+        }
+      } else {
+        otherFailureCount++;
+      }
     }
+
+    const attemptedCount = files.length;
+    const inferredCoveragePercent =
+      attemptedCount > 0 ? Math.round((succeededCount / attemptedCount) * 1000) / 10 : 0;
+
+    logger.info(
+      {
+        attemptedCount,
+        succeededCount,
+        quotaExhaustedCount,
+        otherFailureCount,
+        inferredCoveragePercent,
+        firstQuotaExhaustedAtFile,
+      },
+      'Inferred (LLM) extraction coverage summary',
+    );
 
     return { nodes, edges };
   }
 
-  private async classifyFile(file: ExtractorFileInput): Promise<InferredAnnotationResult | null> {
+  private async classifyFile(
+    file: ExtractorFileInput,
+  ): Promise<{ result: InferredAnnotationResult | null; failureReason?: 'quota_exhausted' | 'other' }> {
     try {
       const truncatedContent = file.content.slice(0, 4000); // keep the prompt small and bounded regardless of file size
       let fullResponse = '';
@@ -73,13 +122,18 @@ export class InferredAnnotationExtractor {
         fullResponse += token;
       }
 
-      return this.parseAnnotation(fullResponse);
+      return { result: this.parseAnnotation(fullResponse) };
     } catch (err) {
+      // Real, typed detection - not a message-text guess. Confirmed
+      // directly against groq-sdk's own real error hierarchy:
+      // RateLimitError extends APIError<429, ...>.
+      const isQuotaExhausted =
+        err !== null && typeof err === 'object' && 'status' in err && (err as { status: unknown }).status === 429;
       logger.warn(
-        { err, filePath: file.relativePath },
+        { err, filePath: file.relativePath, isQuotaExhausted },
         'Inferred annotation extraction failed for this file - skipped, not guessed',
       );
-      return null;
+      return { result: null, failureReason: isQuotaExhausted ? 'quota_exhausted' : 'other' };
     }
   }
 

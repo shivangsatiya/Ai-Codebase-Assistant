@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, { Background, Controls, MiniMap, type NodeMouseHandler } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useRepositoryGraph, useCycles } from '../../hooks/use-graph';
@@ -24,12 +24,41 @@ export function RepositoryGraph({ repositoryId }: { repositoryId: string }) {
   const hasReadyGraph = graphResponse?.status === 'ready';
   const { data: cyclesResult } = useCycles(repositoryId, hasReadyGraph);
 
-  const adapted = useMemo(
-    () => adaptGraph(graphResponse?.nodes ?? [], graphResponse?.edges ?? []),
-    [graphResponse],
-  );
+  const adapted = useMemo(() => {
+    // Milestone 4 Task 5 - measurement only. Real transformation
+    // timing (backend graph shape -> React Flow shape), logged so
+    // it's capturable during an actual benchmark run.
+    const transformStartedAt = performance.now();
+    const result = adaptGraph(graphResponse?.nodes ?? [], graphResponse?.edges ?? []);
+    const transformDurationMs = Math.round(performance.now() - transformStartedAt);
+    if (graphResponse) {
+      // eslint-disable-next-line no-console
+      console.log(`[benchmark] graph transform: ${transformDurationMs}ms`);
+    }
+    return result;
+  }, [graphResponse]);
 
   const { layoutedNodes, isLayouting } = useElkLayout(adapted.nodes, adapted.containsEdges);
+
+  // Milestone 4 Task 5 - measurement only. Approximates "graph data
+  // available -> visibly rendered" via requestAnimationFrame, which
+  // only fires after the browser has genuinely painted the updated
+  // DOM - a real, honest approximation, not an exact frame-rate
+  // measurement (which this project has no reliable mechanism for,
+  // per this task's own explicit instruction not to claim precision
+  // it doesn't have). loggedRef prevents re-logging on every
+  // subsequent re-render once the graph has already rendered once.
+  const hasLoggedRenderRef = useRef(false);
+  useEffect(() => {
+    if (layoutedNodes.length === 0 || hasLoggedRenderRef.current) return;
+    const layoutCompleteAt = performance.now();
+    requestAnimationFrame(() => {
+      const renderDurationMs = Math.round(performance.now() - layoutCompleteAt);
+      // eslint-disable-next-line no-console
+      console.log(`[benchmark] approximate render (layout complete -> next paint): ${renderDurationMs}ms`);
+    });
+    hasLoggedRenderRef.current = true;
+  }, [layoutedNodes]);
 
   const cycleNodeIds = useMemo(() => {
     if (!cyclesResult) return new Set<string>();

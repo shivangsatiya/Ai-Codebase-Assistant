@@ -3,6 +3,7 @@ import type { CandidateNode, CandidateEdge, GraphNode, GraphEdge, PipelineResult
 import { buildNodeIdFromCandidate, buildEdgeIdFromCandidate, buildNodeId } from './node-identity';
 import { validateGraphInvariants } from './graph-invariants';
 import { logger } from '../../utils/logger';
+import { performance } from 'perf_hooks';
 
 const PIPELINE_SOURCE = 'RepositoryIntelligencePipeline';
 const PIPELINE_VERSION = '1';
@@ -56,6 +57,7 @@ export class RepositoryIntelligencePipeline {
 
     // Identity Generation (canonicalization is inherent to this step -
     // see node-identity.ts) + Deduplication.
+    const governanceStartedAt = performance.now();
     const dedupedNodes = this.deduplicateNodes([rootCandidate, ...candidateNodes]);
     const dedupedEdges = this.deduplicateEdges(candidateEdges);
 
@@ -97,6 +99,7 @@ export class RepositoryIntelligencePipeline {
 
     // Graph Validation.
     const failureReasons = validateGraphInvariants(commitSha, nodes, edges);
+    const governanceMs = Math.round(performance.now() - governanceStartedAt);
 
     if (failureReasons.length > 0) {
       // Persistence Approval, the rejection path: the malformed
@@ -109,6 +112,7 @@ export class RepositoryIntelligencePipeline {
         { repositoryId, commitSha, failureReasons },
         'Repository Intelligence Pipeline rejected candidate graph',
       );
+      const persistenceStartedAt = performance.now();
       await this.graphRepo.insert({
         repositoryId,
         commitSha,
@@ -117,11 +121,14 @@ export class RepositoryIntelligencePipeline {
         edges: [],
         failureReasons,
       });
+      const persistenceMs = Math.round(performance.now() - persistenceStartedAt);
+      logger.info({ repositoryId, commitSha, governanceMs, persistenceMs }, 'Graph governance + persistence complete (rejected)');
       return { status: 'failed', repositoryId, commitSha, failureReasons };
     }
 
     // Persistence Approval, the success path - the only code path in
     // this system that can ever mark a graph 'ready'.
+    const persistenceStartedAt = performance.now();
     await this.graphRepo.insert({
       repositoryId,
       commitSha,
@@ -130,9 +137,10 @@ export class RepositoryIntelligencePipeline {
       edges,
       failureReasons: [],
     });
+    const persistenceMs = Math.round(performance.now() - persistenceStartedAt);
 
     logger.info(
-      { repositoryId, commitSha, nodeCount: nodes.length, edgeCount: edges.length },
+      { repositoryId, commitSha, nodeCount: nodes.length, edgeCount: edges.length, governanceMs, persistenceMs },
       'Repository Intelligence Pipeline approved and persisted graph',
     );
 

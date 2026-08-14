@@ -1,6 +1,7 @@
 import { InferredAnnotationExtractor } from '../src/services/knowledge-graph/inferred-annotation-extractor';
 import type { ExtractorFileInput } from '../src/services/knowledge-graph/deterministic-extractor';
 import type { IChatCompletionProvider, StreamCompletionParams } from '../src/clients/chat-completion-provider';
+import { logger } from '../src/utils/logger';
 
 class FakeChatCompletionProvider implements IChatCompletionProvider {
   public callCount = 0;
@@ -23,6 +24,28 @@ class FakeChatCompletionProvider implements IChatCompletionProvider {
 
 function file(relativePath: string, content = ''): ExtractorFileInput {
   return { relativePath, content, extension: '.ts' };
+}
+
+/**
+ * Simulates the real, typed shape groq-sdk's own RateLimitError has -
+ * confirmed directly against node_modules/groq-sdk/core/error.d.ts
+ * (`class RateLimitError extends APIError<429, Headers>`) rather than
+ * assumed. A plain object with a `status` field is sufficient here
+ * since the real detection logic only checks `err.status === 429`, not
+ * the specific error class.
+ */
+class QuotaExhaustedProvider implements IChatCompletionProvider {
+  async *streamCompletion(): AsyncIterable<string> {
+    const err = new Error('Rate limit reached') as Error & { status: number };
+    err.status = 429;
+    throw err;
+  }
+}
+
+class GenericFailureProvider implements IChatCompletionProvider {
+  async *streamCompletion(): AsyncIterable<string> {
+    throw new Error('Simulated generic provider failure');
+  }
 }
 
 describe('InferredAnnotationExtractor - successful classification', () => {
@@ -228,4 +251,88 @@ describe('InferredAnnotationExtractor - graceful degradation', () => {
 
     expect(nodes.find((n) => n.label === 'Good')).toBeDefined();
   });
+});
+
+describe('InferredAnnotationExtractor - quota-exhaustion classification (Milestone 4 Task 5)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('classifies a real, typed 429 as quota exhaustion, not a generic failure, in the summary log', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const extractor = new InferredAnnotationExtractor(new QuotaExhaustedProvider());
+
+    await extractor.extract([file('src/a.ts'), file('src/b.ts'), file('src/c.ts')]);
+
+    const summaryLog = infoSpy.mock.calls.find((c) => c[1] === 'Inferred (LLM) extraction coverage summary');
+    expect(summaryLog).toBeDefined();
+    const payload = summaryLog![0] as Record<string, unknown>;
+    expect(payload.attemptedCount).toBe(3);
+    expect(payload.succeededCount).toBe(0);
+    expect(payload.quotaExhaustedCount).toBe(3);
+    expect(payload.otherFailureCount).toBe(0);
+    expect(payload.inferredCoveragePercent).toBe(0);
+    expect(payload.firstQuotaExhaustedAtFile).toBe('src/a.ts');
+  });
+
+  it('classifies a generic (non-429) failure as "other", not quota exhaustion', async () => {
+    const infoSpy = jest.spyOn(logger, 'info');
+    jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const extractor = new InferredAnnotationExtractor(new GenericFailureProvider());
+
+    await extractor.extract([file('src/a.ts')]);
+
+    const summaryLog = infoSpy.mock.calls.find((c) => c[1] === 'Inferred (LLM) extraction coverage summary');
+    const payload = summaryLog![0] as Record<string, unknown>;
+    expect(payload.quotaExhaustedCount).toBe(0);
+    expect(payload.otherFailureCount).toBe(1);
+  });
+
+  it(
+    'REGRESSION: a real, mixed run (some files succeed, then quota exhausts partway through) reports an ' +
+      'honest, real coverage percentage - never claims full inferred coverage when it was actually partial',
+    async () => {
+      const infoSpy = jest.spyOn(logger, 'info');
+      jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+      let callCount = 0;
+      class MixedProvider implements IChatCompletionProvider {
+        async *streamCompletion(_params: StreamCompletionParams): AsyncIterable<string> {
+          callCount++;
+          if (callCount <= 2) {
+            const response = JSON.stringify({
+              isRoute: false,
+              httpMethod: null,
+              httpPath: null,
+              isService: true,
+              isController: false,
+              isDbModel: false,
+              isCache: false,
+              isQueue: false,
+              isEvent: false,
+              isConfiguration: false,
+              isAuthComponent: false,
+              entityName: null,
+            });
+            for (const char of response) yield char;
+          } else {
+            const err = new Error('Rate limit reached') as Error & { status: number };
+            err.status = 429;
+            throw err;
+          }
+        }
+      }
+      const extractor = new InferredAnnotationExtractor(new MixedProvider());
+
+      await extractor.extract([file('src/a.ts'), file('src/b.ts'), file('src/c.ts'), file('src/d.ts')]);
+
+      const summaryLog = infoSpy.mock.calls.find((c) => c[1] === 'Inferred (LLM) extraction coverage summary');
+      const payload = summaryLog![0] as Record<string, unknown>;
+      expect(payload.attemptedCount).toBe(4);
+      expect(payload.succeededCount).toBe(2);
+      expect(payload.quotaExhaustedCount).toBe(2);
+      expect(payload.inferredCoveragePercent).toBe(50);
+      expect(payload.firstQuotaExhaustedAtFile).toBe('src/c.ts');
+    },
+  );
 });

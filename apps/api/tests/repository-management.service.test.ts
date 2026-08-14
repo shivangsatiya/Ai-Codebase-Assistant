@@ -1,6 +1,8 @@
 import { RepositoryManagementService } from '../src/services/repository-management.service';
 import type { IRepositoryRepository, IJobRepository, CreateRepositoryInput } from '../src/repositories/repository.repository';
 import type { IChunkRepository, ChunkToInsert, InsertResult, ChunkSearchResult } from '../src/repositories/chunk.repository';
+import type { IChunkCheckpointRepository, ChunkCheckpointInput } from '../src/repositories/chunk-checkpoint.repository';
+import type { IRepositoryKnowledgeGraphRepository } from '../src/repositories/repository-knowledge-graph.repository';
 import type { IChatRepository, IMessageRepository, CreateMessageInput } from '../src/repositories/chat.repository';
 import type { RepositoryDocument, RepositoryStatus } from '../src/models/repository.model';
 import type { JobDocument, JobStage } from '../src/models/job.model';
@@ -42,9 +44,13 @@ class FakeRepositoryRepository implements IRepositoryRepository {
   async updateStatus(
     _id: string,
     _status: RepositoryStatus,
-    _extra?: Partial<Pick<RepositoryDocument, 'fileCount' | 'defaultBranch' | 'commitSha' | 'errorMessage'>>,
+    _extra?: Partial<Pick<RepositoryDocument, 'fileCount' | 'defaultBranch' | 'commitSha' | 'errorMessage' | 'isPrivate'>>,
   ): Promise<void> {
     // no-op - not exercised by these tests
+  }
+
+  async findByOwnerIdAndGithubUrl(_ownerId: string, _githubUrl: string): Promise<RepositoryDocument | null> {
+    return null;
   }
 
   async deleteById(id: string): Promise<void> {
@@ -70,6 +76,10 @@ class FakeJobRepository implements IJobRepository {
 
   async deleteByRepositoryId(repositoryId: string): Promise<void> {
     this.deletedForRepositoryIds.push(repositoryId);
+  }
+
+  async claimStale(_staleBefore: Date): Promise<JobDocument | null> {
+    return null;
   }
 }
 
@@ -134,14 +144,77 @@ class FakeMessageRepository implements IMessageRepository {
   }
 }
 
+class FakeChunkCheckpointRepository implements IChunkCheckpointRepository {
+  public deletedForRepositoryIds: string[] = [];
+
+  async insertMany(_checkpoints: ChunkCheckpointInput[]): Promise<void> {
+    // no-op - not exercised by these tests
+  }
+
+  async findByRepositoryAndCommit(_repositoryId: string, _commitSha: string) {
+    return [];
+  }
+
+  async deleteByRepositoryId(repositoryId: string): Promise<void> {
+    this.deletedForRepositoryIds.push(repositoryId);
+  }
+
+  async deleteByJobId(_jobId: string): Promise<void> {
+    // no-op - not exercised by these tests
+  }
+}
+
+class FakeKnowledgeGraphRepository implements IRepositoryKnowledgeGraphRepository {
+  public deletedForRepositoryIds: string[] = [];
+
+  async insert(): Promise<never> {
+    throw new Error('Not used by these tests');
+  }
+
+  async findByCommitSha() {
+    return null;
+  }
+
+  async findLatestByRepositoryId() {
+    return null;
+  }
+
+  async findAllVersionsByRepositoryId() {
+    return [];
+  }
+
+  async deleteByRepositoryId(repositoryId: string): Promise<void> {
+    this.deletedForRepositoryIds.push(repositoryId);
+  }
+}
+
 function buildService() {
   const repositoryRepo = new FakeRepositoryRepository();
   const jobRepo = new FakeJobRepository();
   const chunkRepo = new FakeChunkRepository();
   const chatRepo = new FakeChatRepository();
   const messageRepo = new FakeMessageRepository();
-  const service = new RepositoryManagementService(repositoryRepo, jobRepo, chunkRepo, chatRepo, messageRepo);
-  return { service, repositoryRepo, jobRepo, chunkRepo, chatRepo, messageRepo };
+  const chunkCheckpointRepo = new FakeChunkCheckpointRepository();
+  const knowledgeGraphRepo = new FakeKnowledgeGraphRepository();
+  const service = new RepositoryManagementService(
+    repositoryRepo,
+    jobRepo,
+    chunkRepo,
+    chatRepo,
+    messageRepo,
+    chunkCheckpointRepo,
+    knowledgeGraphRepo,
+  );
+  return {
+    service,
+    repositoryRepo,
+    jobRepo,
+    chunkRepo,
+    chatRepo,
+    messageRepo,
+    chunkCheckpointRepo,
+    knowledgeGraphRepo,
+  };
 }
 
 describe('RepositoryManagementService - listForUser', () => {
@@ -190,6 +263,34 @@ describe('RepositoryManagementService - deleteRepository', () => {
     expect(chunkRepo.deletedForRepositoryIds).toEqual(['repo-1']);
     expect(repositoryRepo.deletedIds).toEqual(['repo-1']);
   });
+
+  it(
+    'REGRESSION: also cascades to chunk checkpoints (Milestone 4 Task 4.3) - a new collection introduced ' +
+      'this task, deliberately tested here so it can never become its own orphaned-data gap the way the ' +
+      'knowledge graph collection was, before Task 4.5 closed that separately (see the dedicated test below)',
+    async () => {
+      const { service, repositoryRepo, chunkCheckpointRepo } = buildService();
+      repositoryRepo.seed(makeRepoDoc('repo-1', 'user-a'));
+
+      await service.deleteRepository('repo-1', 'user-a');
+
+      expect(chunkCheckpointRepo.deletedForRepositoryIds).toEqual(['repo-1']);
+    },
+  );
+
+  it(
+    'REGRESSION (Milestone 4 Task 4.5): also cascades to the knowledge graph collection - the real, ' +
+      'confirmed gap found and explicitly deferred during the design phase, closed here. Repository ' +
+      'deletion previously left every graph document for that repository permanently orphaned.',
+    async () => {
+      const { service, repositoryRepo, knowledgeGraphRepo } = buildService();
+      repositoryRepo.seed(makeRepoDoc('repo-1', 'user-a'));
+
+      await service.deleteRepository('repo-1', 'user-a');
+
+      expect(knowledgeGraphRepo.deletedForRepositoryIds).toEqual(['repo-1']);
+    },
+  );
 
   it('does not fail when a repository has no associated chats at all', async () => {
     const { service, repositoryRepo, messageRepo } = buildService();

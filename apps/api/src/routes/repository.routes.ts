@@ -49,9 +49,9 @@ repositoryRouter.post(
       const ownerId = req.userId as string;
       const { githubUrl } = req.body;
 
-      const { repository, job } = await repositoryImportService.startImport(ownerId, githubUrl);
+      const { repository, job, isNewWork } = await repositoryImportService.startImport(ownerId, githubUrl);
 
-      res.status(202).json({
+      res.status(isNewWork ? 202 : 200).json({
         repositoryId: repository._id.toString(),
         status: repository.status,
         jobId: job._id.toString(),

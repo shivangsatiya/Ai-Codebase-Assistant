@@ -28,6 +28,10 @@ class FakeGraphRepository implements IRepositoryKnowledgeGraphRepository {
   async findAllVersionsByRepositoryId(): Promise<Array<{ commitSha: string; status: GraphStatus; createdAt: Date }>> {
     return [];
   }
+
+  async deleteByRepositoryId(): Promise<void> {
+    // no-op - not exercised by these tests
+  }
 }
 
 /**

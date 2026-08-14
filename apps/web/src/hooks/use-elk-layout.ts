@@ -22,10 +22,16 @@ export function useElkLayout(nodes: FlowNode[], containsEdges: FlowEdge[]) {
   useEffect(() => {
     let cancelled = false;
     setIsLayouting(true);
+    // Milestone 4 Task 5 - measurement only. Real ELK layout timing,
+    // logged so it's capturable during an actual benchmark run.
+    const layoutStartedAt = performance.now();
 
     layoutWithElk(nodes, containsEdges)
       .then((result) => {
         if (!cancelled) {
+          const layoutDurationMs = Math.round(performance.now() - layoutStartedAt);
+          // eslint-disable-next-line no-console
+          console.log(`[benchmark] ELK layout: ${layoutDurationMs}ms (${result.length} nodes)`);
           setLayoutedNodes(result);
         }
       })

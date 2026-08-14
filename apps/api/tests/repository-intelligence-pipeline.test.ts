@@ -40,6 +40,10 @@ class FakeGraphRepository implements IRepositoryKnowledgeGraphRepository {
   ): Promise<Array<{ commitSha: string; status: GraphStatus; createdAt: Date }>> {
     return [];
   }
+
+  async deleteByRepositoryId(_repositoryId: string): Promise<void> {
+    // no-op - not exercised by these tests
+  }
 }
 
 function fileCandidate(path: string, overrides: Partial<CandidateNode> = {}): CandidateNode {

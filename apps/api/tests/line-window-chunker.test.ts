@@ -42,4 +42,24 @@ describe('lineWindowChunkFile', () => {
       [14, 14],
     ]);
   });
+
+  it(
+    'REGRESSION (Milestone 4 Task 5): a genuinely empty file produces zero chunks, not one chunk with ' +
+      "empty content - found via a real benchmark run, where \"\".split('\\n') returning [''] (length 1, " +
+      "not 0) meant the file's own guard clause never actually triggered for a real empty file",
+    () => {
+      expect(lineWindowChunkFile('')).toEqual([]);
+    },
+  );
+
+  it('a whitespace-only file (e.g. a file with just blank lines) also produces zero chunks, not meaningless ones', () => {
+    expect(lineWindowChunkFile('\n\n\n')).toEqual([]);
+    expect(lineWindowChunkFile('   \n\t\n  ')).toEqual([]);
+  });
+
+  it('a genuinely non-empty file still chunks normally - the fix does not affect real content', () => {
+    const chunks = lineWindowChunkFile('const x = 1;\nconst y = 2;');
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks[0]!.content).toContain('const x = 1;');
+  });
 });

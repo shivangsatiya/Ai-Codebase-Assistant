@@ -3,6 +3,7 @@ import { InferredAnnotationExtractor } from './inferred-annotation-extractor';
 import { RepositoryIntelligencePipeline } from './repository-intelligence-pipeline';
 import type { PipelineResult } from './types';
 import { logger } from '../../utils/logger';
+import { performance } from 'perf_hooks';
 
 /**
  * Extracted for the same reason IGitHubClient/IGitClonerClient/
@@ -57,10 +58,24 @@ export class KnowledgeGraphGenerationService implements IKnowledgeGraphGeneratio
     files: ExtractorFileInput[],
     symbols: ExtractorSymbolInput[],
   ): Promise<PipelineResult> {
+    // Milestone 4 Task 5 - measurement only, no behavior change. The
+    // real graph stages (extraction, governance, persistence) were
+    // previously all folded into one combined `graphMs` number in
+    // repository-import.service.ts, with no way to tell which of the
+    // three actually dominated. Deterministic and inferred extraction
+    // are measured separately here since they have genuinely different
+    // real costs - deterministic is pure, local computation; inferred
+    // makes real per-file LLM calls, already known from Milestone 4
+    // Task 1's own measurement to be a major cost driver (graphMs was
+    // 167s for a 56-file repository, dominated by 56 sequential
+    // per-file Groq calls).
+    const deterministicStartedAt = performance.now();
     const deterministic = await this.extractor.extract(repositoryId, files, symbols);
+    const deterministicExtractionMs = Math.round(performance.now() - deterministicStartedAt);
 
     let inferredNodes: typeof deterministic.nodes = [];
     let inferredEdges: typeof deterministic.edges = [];
+    const inferredStartedAt = performance.now();
     try {
       const inferred = await this.inferredExtractor.extract(files);
       inferredNodes = inferred.nodes;
@@ -68,6 +83,12 @@ export class KnowledgeGraphGenerationService implements IKnowledgeGraphGeneratio
     } catch (err) {
       logger.warn({ err, repositoryId }, 'Inferred annotation extraction failed entirely - proceeding with deterministic tier only');
     }
+    const inferredExtractionMs = Math.round(performance.now() - inferredStartedAt);
+
+    logger.info(
+      { repositoryId, commitSha, deterministicExtractionMs, inferredExtractionMs, fileCount: files.length },
+      'Graph extraction complete (deterministic + inferred)',
+    );
 
     return this.pipeline.process(
       repositoryId,

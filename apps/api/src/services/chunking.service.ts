@@ -70,9 +70,18 @@ export class ChunkingService implements IChunkingService {
       rawChunks = lineWindowChunkFile(content);
     }
 
+    // Defensive, not redundant with the real fix in
+    // line-window-chunker.ts - that fix addresses the one confirmed
+    // root cause (a whole file being empty). This filter protects the
+    // same real invariant (every persisted chunk has genuine, non-empty
+    // content) regardless of which chunker produced a chunk or why -
+    // cheap insurance against this exact class of bug recurring from a
+    // different source later.
+    const nonEmptyChunks = rawChunks.filter((chunk) => chunk.content.trim().length > 0);
+
     const language = extensionToLanguageLabel(extension);
 
-    return rawChunks.map((chunk) => ({
+    return nonEmptyChunks.map((chunk) => ({
       ...chunk,
       filePath,
       language,

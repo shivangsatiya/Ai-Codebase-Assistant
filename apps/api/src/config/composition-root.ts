@@ -8,10 +8,12 @@ import { ChunkingService } from '../services/chunking.service';
 import { RetrievalService } from '../services/retrieval.service';
 import { ChatOrchestrationService } from '../services/chat-orchestration.service';
 import { RepositoryImportService } from '../services/repository-import.service';
+import { StaleJobRecoveryService } from '../services/stale-job-recovery.service';
 import { RepositoryManagementService } from '../services/repository-management.service';
 import { GitHubOAuthService } from '../services/github-oauth.service';
 import { MongoRepositoryRepository, MongoJobRepository } from '../repositories/repository.repository';
 import { MongoChunkRepository } from '../repositories/chunk.repository';
+import { MongoChunkCheckpointRepository } from '../repositories/chunk-checkpoint.repository';
 import { MongoChatRepository, MongoMessageRepository } from '../repositories/chat.repository';
 import { MongoGitHubConnectionRepository } from '../repositories/github-connection.repository';
 import { MongoGitHubOAuthStateRepository } from '../repositories/github-oauth-state.repository';
@@ -41,6 +43,7 @@ import { QuestionRouter } from '../services/knowledge-graph/question-router';
 export const repositoryRepo = new MongoRepositoryRepository();
 export const jobRepo = new MongoJobRepository();
 export const chunkRepo = new MongoChunkRepository();
+export const chunkCheckpointRepo = new MongoChunkCheckpointRepository();
 export const chatRepo = new MongoChatRepository();
 export const messageRepo = new MongoMessageRepository();
 export const githubConnectionRepo = new MongoGitHubConnectionRepository();
@@ -95,6 +98,13 @@ export const repositoryImportService = new RepositoryImportService(
   githubConnectionRepo,
   tokenEncryptor,
   knowledgeGraphGenerationService,
+  chunkCheckpointRepo,
+);
+
+export const staleJobRecoveryService = new StaleJobRecoveryService(
+  jobRepo,
+  repositoryImportService,
+  env.STALE_JOB_THRESHOLD_MS,
 );
 
 export const retrievalService = new RetrievalService(embeddingProvider, chunkRepo, env.CHAT_RETRIEVAL_TOP_K);
@@ -113,6 +123,8 @@ export const repositoryManagementService = new RepositoryManagementService(
   chunkRepo,
   chatRepo,
   messageRepo,
+  chunkCheckpointRepo,
+  knowledgeGraphRepo,
 );
 
 export const chatOrchestrationService = new ChatOrchestrationService(

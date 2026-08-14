@@ -43,7 +43,19 @@ export interface CycleDetectionResult {
 }
 
 export async function getRepositoryGraph(repositoryId: string): Promise<GraphResponse> {
-  return apiRequest<GraphResponse>(`/api/repositories/${repositoryId}/graph`);
+  // Milestone 4 Task 5 - measurement only, no behavior change. Real
+  // graph-request timing, logged to the browser console so it's
+  // capturable during an actual benchmark run - entirely unmeasured
+  // before this, a genuine gap found during this task's own required
+  // inspection step.
+  const requestStartedAt = performance.now();
+  const result = await apiRequest<GraphResponse>(`/api/repositories/${repositoryId}/graph`);
+  const requestDurationMs = Math.round(performance.now() - requestStartedAt);
+  // eslint-disable-next-line no-console
+  console.log(
+    `[benchmark] graph request: ${requestDurationMs}ms (${result.nodes.length} nodes, ${result.edges.length} edges)`,
+  );
+  return result;
 }
 
 /**

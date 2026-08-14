@@ -60,11 +60,36 @@ export class ChatOrchestrationService {
     const history = await this.messageRepo.findByChatId(chatId);
     const llmMessages: ChatMessage[] = history.map((m) => ({ role: m.role, content: m.content }));
 
+    // Milestone 4 Task 5 - measurement only. Time to first token (TTFT)
+    // and streaming throughput were entirely unmeasured before this -
+    // real gaps found during Task 5's own required inspection step,
+    // not something Task 1's routing/retrieval evaluation ever covered
+    // (a deliberately different concern - Task 1 measures whether an
+    // answer is good, this measures how fast it arrives).
+    const generationStartedAt = performance.now();
+    let firstTokenAt: number | null = null;
     let fullText = '';
     for await (const token of this.llmProvider.streamCompletion({ systemPrompt, messages: llmMessages })) {
+      if (firstTokenAt === null) {
+        firstTokenAt = performance.now();
+      }
       fullText += token;
       yield token;
     }
+    const generationEndedAt = performance.now();
+    const timeToFirstTokenMs = firstTokenAt !== null ? Math.round(firstTokenAt - generationStartedAt) : null;
+    const streamingDurationMs = firstTokenAt !== null ? Math.round(generationEndedAt - firstTokenAt) : null;
+    // Character count, not a real tokenizer's token count - this
+    // project doesn't have one readily available, and the spec's own
+    // instruction is explicit: record approximate output where
+    // reliably available, don't manufacture false precision. A rough
+    // characters/sec figure is still a genuinely useful throughput
+    // signal, just labeled honestly for what it actually measures.
+    const outputCharacterCount = fullText.length;
+    const charactersPerSecond =
+      streamingDurationMs !== null && streamingDurationMs > 0
+        ? Math.round((outputCharacterCount / streamingDurationMs) * 1000)
+        : null;
 
     const citations = extractCitations(fullText);
     await this.messageRepo.create({ chatId, role: 'assistant', content: fullText, citations });
@@ -77,7 +102,9 @@ export class ChatOrchestrationService {
         retrievedChunkCount: retrievedChunks.length,
         citationCount: citations.length,
         durationMs,
-        stages: { retrievalMs },
+        stages: { retrievalMs, timeToFirstTokenMs, streamingDurationMs },
+        outputCharacterCount,
+        charactersPerSecond,
       },
       'Chat response complete',
     );

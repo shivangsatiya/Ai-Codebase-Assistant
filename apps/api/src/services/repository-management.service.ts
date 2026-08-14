@@ -1,6 +1,8 @@
 import { performance } from 'perf_hooks';
 import type { IRepositoryRepository, IJobRepository } from '../repositories/repository.repository';
 import type { IChunkRepository } from '../repositories/chunk.repository';
+import type { IChunkCheckpointRepository } from '../repositories/chunk-checkpoint.repository';
+import type { IRepositoryKnowledgeGraphRepository } from '../repositories/repository-knowledge-graph.repository';
 import type { IChatRepository, IMessageRepository } from '../repositories/chat.repository';
 import type { RepositoryDocument } from '../models/repository.model';
 import { NotFoundError } from '../utils/errors';
@@ -21,6 +23,8 @@ export class RepositoryManagementService {
     private readonly chunkRepo: IChunkRepository,
     private readonly chatRepo: IChatRepository,
     private readonly messageRepo: IMessageRepository,
+    private readonly chunkCheckpointRepo: IChunkCheckpointRepository,
+    private readonly knowledgeGraphRepo: IRepositoryKnowledgeGraphRepository,
   ) {}
 
   async listForUser(userId: string): Promise<RepositoryDocument[]> {
@@ -32,15 +36,19 @@ export class RepositoryManagementService {
    * review only explicitly named Chunks as needing cascade-delete?
    *
    * The same correctness requirement applies to every collection that
-   * references repositoryId, not just chunks - Job, Chat, and Message
-   * documents would all become orphaned, invisible garbage the same
-   * way un-deleted chunks would. This is a deliberate extension of the
-   * design's literal scope, not a silent one: chunks were the example
-   * given, not an exhaustive list of what actually needs cleanup.
+   * references repositoryId, not just chunks - Job, Chat, Message, and
+   * (per Milestone 4 Task 4.5) RepositoryKnowledgeGraph documents would
+   * all become orphaned, invisible garbage the same way un-deleted
+   * chunks would. This is a deliberate extension of the design's
+   * literal scope, not a silent one: chunks were the example given, not
+   * an exhaustive list of what actually needs cleanup. The knowledge
+   * graph gap specifically was found and explicitly deferred during
+   * Milestone 4's design phase, then closed here once its own dedicated
+   * substep came up.
    *
    * Why deletes in this specific order (messages -> chats -> jobs ->
-   * chunks -> the repository document itself), without wrapping it in a
-   * database transaction?
+   * chunks -> chunk checkpoints -> knowledge graphs -> the repository
+   * document itself), without wrapping it in a database transaction?
    *
    * MongoDB Atlas does support multi-document transactions, and a real,
    * larger-scale system handling many concurrent deletions might
@@ -74,6 +82,8 @@ export class RepositoryManagementService {
     await this.chatRepo.deleteByRepositoryId(repositoryId);
     await this.jobRepo.deleteByRepositoryId(repositoryId);
     await this.chunkRepo.deleteByRepository(repositoryId);
+    await this.chunkCheckpointRepo.deleteByRepositoryId(repositoryId);
+    await this.knowledgeGraphRepo.deleteByRepositoryId(repositoryId);
     await this.repositoryRepo.deleteById(repositoryId);
 
     const durationMs = Math.round(performance.now() - startedAt);

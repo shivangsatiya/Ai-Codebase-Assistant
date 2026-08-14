@@ -11,6 +11,7 @@ import { RefreshTokenModel } from '../models/refresh-token.model';
 import { GitHubConnectionModel } from '../models/github-connection.model';
 import { GitHubOAuthStateModel } from '../models/github-oauth-state.model';
 import { RepositoryKnowledgeGraphModel } from '../models/repository-knowledge-graph.model';
+import { ChunkCheckpointModel } from '../models/chunk-checkpoint.model';
 
 export async function connectDB(): Promise<void> {
   mongoose.set('strictQuery', true);
@@ -59,6 +60,16 @@ export async function connectDB(): Promise<void> {
  * 3, for ChatModel/MessageModel), so every new indexed model added to
  * this project gets checked against this list deliberately now, not by
  * memory.
+ *
+ * ChunkCheckpointModel (Milestone 4 Task 4.3, indexes on
+ * {repositoryId, commitSha} and {jobId}) was itself missed from this
+ * exact list - found and fixed during Task 5's own required
+ * "inspect the actual configuration before benchmarking" step, not
+ * during Task 4.3 itself. Its indexes aren't unique, so the real risk
+ * was a slower query during the startup window rather than a
+ * correctness bug - but a real benchmark import exercises this index
+ * heavily, and an inaccurate "why is this slower than expected"
+ * measurement helps no one, so it's included here now.
  */
 async function ensureIndexesReady(): Promise<void> {
   await Promise.all([
@@ -72,6 +83,7 @@ async function ensureIndexesReady(): Promise<void> {
     GitHubConnectionModel.init(),
     GitHubOAuthStateModel.init(),
     RepositoryKnowledgeGraphModel.init(),
+    ChunkCheckpointModel.init(),
   ]);
   logger.info('MongoDB indexes confirmed built');
 }
