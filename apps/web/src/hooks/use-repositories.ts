@@ -3,6 +3,7 @@ import {
   listRepositories,
   getRepository,
   importRepository,
+  deleteRepository,
   IN_PROGRESS_STATUSES,
   type RepositorySummary,
   type RepositoryDetail,
@@ -64,6 +65,21 @@ export function useImportRepository() {
     mutationFn: importRepository,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: repositoryKeys.list });
+    },
+  });
+}
+
+export function useDeleteRepository() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteRepository,
+    onSuccess: (_data, repositoryId) => {
+      queryClient.invalidateQueries({ queryKey: repositoryKeys.list });
+      // The deleted repository's own detail query would now correctly
+      // 404 if refetched - removed outright rather than left to error
+      // out the next time anything happens to touch it.
+      queryClient.removeQueries({ queryKey: repositoryKeys.detail(repositoryId) });
     },
   });
 }

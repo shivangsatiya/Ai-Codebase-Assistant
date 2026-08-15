@@ -63,7 +63,7 @@ services:
       - key: RATE_LIMIT_CHAT_MAX
         value: '30'
       - key: ALLOWED_ORIGINS
-        sync: false # set to your real frontend origin(s) once one exists; comma-separated for more than one
+        sync: false # set to the real, deployed web service's own URL (see ai-codebase-assistant-web below) once you know it - comma-separated for more than one origin
       # Deliberately conservative (not the 3000 default suitable for a
       # normally-resourced deployment) - Render's free tier caps memory
       # at 512MB, and a real live deployment confirmed via a confirmed
@@ -78,3 +78,49 @@ services:
         value: '500'
       - key: GITHUB_TOKEN
         sync: false # optional but recommended - raises the GitHub API rate limit from 60/hr to 5000/hr
+
+  - type: web
+    name: ai-codebase-assistant-web
+    runtime: static
+    # This project is an npm workspaces monorepo, same reasoning as the
+    # API service above - the build must run from the repo root to
+    # resolve the full workspace dependency tree, then build only
+    # apps/web specifically (an existing, already-defined root script).
+    # --ignore-scripts is a real, verified fix, not just a speed
+    # optimization: a bare `npm install` in this workspaces monorepo
+    # installs ALL workspaces' dependencies together (a single, shared
+    # lockfile - there's no way to install just apps/web's own deps),
+    # including apps/api's heavy native ones (bcrypt, sharp,
+    # onnxruntime-node) that this static site never imports or needs at
+    # all - confirmed directly, zero references anywhere in apps/web's
+    # own source. Their postinstall scripts do real, unnecessary native
+    # compilation and external downloads (onnxruntime-node's alone
+    # reaches out to api.nuget.org) that a pure `tsc -b && vite build`
+    # has no reason to depend on succeeding.
+    buildCommand: npm install --ignore-scripts && npm run build:web
+    staticPublishPath: apps/web/dist
+    envVars:
+      # VITE_API_BASE_URL must be the REAL, deployed API service's own
+      # URL (e.g. https://ai-codebase-assistant-api.onrender.com - find
+      # this on the API service's own page in the Render Dashboard,
+      # copied exactly, including the https:// prefix and no trailing
+      # slash). Set manually rather than via a fromService reference:
+      # Render's own documented examples show inconsistent output
+      # formats for the `host` property across different real-world
+      # blueprints (some already include the full onrender.com domain,
+      # some don't) - a manual value copied directly from the real,
+      # deployed service is the one guaranteed-correct source here,
+      # matching the same sync: false pattern already proven for every
+      # other manually-entered value in this file.
+      - key: VITE_API_BASE_URL
+        sync: false # the API service's own real URL, copied from its Render Dashboard page
+    # A single-page app - without this rewrite rule, visiting a real,
+    # deep link like /workspace/abc123 directly (not by client-side
+    # navigation from / first) would 404, since no literal file exists
+    # at that path. This rewrites every path to index.html, letting
+    # react-router-dom's own client-side routing take over from there,
+    # exactly the way it already does for a fresh page load at / itself.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

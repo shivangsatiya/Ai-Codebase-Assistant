@@ -57,3 +57,8 @@ export async function importRepository(githubUrl: string): Promise<ImportReposit
     body: JSON.stringify({ githubUrl }),
   });
 }
+
+/** Matches DELETE /api/repositories/:id exactly - a real 204 on success, no response body. */
+export async function deleteRepository(repositoryId: string): Promise<void> {
+  await apiRequest<void>(`/api/repositories/${repositoryId}`, { method: 'DELETE' });
+}
