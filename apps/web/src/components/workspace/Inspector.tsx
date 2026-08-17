@@ -44,7 +44,7 @@ export function Inspector() {
     const nodeById = new Map(adapted.nodes.map((n) => [n.id, n]));
 
     return (
-      <aside data-testid="inspector-panel" className="flex h-full w-80 flex-col gap-3 overflow-y-auto border-l border-border bg-surface p-4">
+      <aside data-testid="inspector-panel" className="flex h-full w-full flex-col gap-3 overflow-y-auto border-l border-border bg-surface p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate font-mono text-sm font-medium text-fg">{selectedNode.data.label}</p>
@@ -53,7 +53,7 @@ export function Inspector() {
           <button
             onClick={() => selectNode(null)}
             aria-label="Deselect node, return to repository overview"
-            className="shrink-0 text-xs text-fg-muted hover:text-fg"
+            className="shrink-0 rounded p-1.5 text-sm text-fg-muted hover:bg-surface-elevated hover:text-fg active:bg-surface-elevated"
           >
             ✕
           </button>
@@ -121,7 +121,7 @@ export function Inspector() {
 
   if (!repositoryId) {
     return (
-      <aside className="flex h-full w-80 flex-col border-l border-border bg-surface p-4">
+      <aside className="flex h-full w-full flex-col border-l border-border bg-surface p-4">
         <p className="text-sm font-medium text-fg">Repository Overview</p>
         <p className="mt-2 text-xs text-fg-subtle">Select a repository to see its structure and metrics here.</p>
       </aside>
@@ -130,7 +130,7 @@ export function Inspector() {
 
   if (isLoading) {
     return (
-      <aside className="flex h-full w-80 flex-col gap-3 border-l border-border bg-surface p-4">
+      <aside className="flex h-full w-full flex-col gap-3 border-l border-border bg-surface p-4">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-3 w-full" />
         <Skeleton className="h-3 w-2/3" />
@@ -140,7 +140,7 @@ export function Inspector() {
 
   if (isError || !repository) {
     return (
-      <aside className="flex h-full w-80 flex-col border-l border-border bg-surface p-4">
+      <aside className="flex h-full w-full flex-col border-l border-border bg-surface p-4">
         <p className="text-sm font-medium text-fg">Repository Overview</p>
         <p className="mt-2 text-xs text-fg-subtle">Could not load this repository.</p>
       </aside>
@@ -148,7 +148,7 @@ export function Inspector() {
   }
 
   return (
-    <aside className="flex h-full w-80 flex-col gap-3 border-l border-border bg-surface p-4">
+    <aside className="flex h-full w-full flex-col gap-3 border-l border-border bg-surface p-4">
       <div>
         <p className="text-sm font-medium text-fg">Repository Overview</p>
         <p className="mt-1 truncate font-mono text-xs text-fg-subtle">{repository.githubUrl}</p>

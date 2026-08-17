@@ -9,7 +9,7 @@ export function Sidebar() {
   const [isImporting, setIsImporting] = useState(false);
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-border bg-surface">
+    <aside className="flex h-full w-full flex-col border-r border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <span className="font-mono text-sm font-semibold text-fg">Repository Intelligence</span>
       </div>

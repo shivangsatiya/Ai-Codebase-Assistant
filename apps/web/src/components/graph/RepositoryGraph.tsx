@@ -11,10 +11,12 @@ import { nodeTypes } from './GraphNode';
 import { Skeleton } from '../ui/skeleton';
 import { ErrorState } from '../workspace/ErrorState';
 import { NodeHoverTooltip } from './NodeHoverTooltip';
+import { useIsMobileLayout } from '../../hooks/use-media-query';
 
 const CYCLE_HIGHLIGHT_CLASS = 'graph-node-in-cycle';
 
 export function RepositoryGraph({ repositoryId }: { repositoryId: string }) {
+  const isMobile = useIsMobileLayout();
   const { data: graphResponse, isLoading, isError, error, refetch } = useRepositoryGraph(repositoryId);
   const selectedNodeId = useGraphUiStore((s) => s.selectedNodeId);
   const selectNode = useGraphUiStore((s) => s.selectNode);
@@ -181,18 +183,24 @@ export function RepositoryGraph({ repositoryId }: { repositoryId: string }) {
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#1b1f2c" gap={24} />
-        <Controls showInteractive={false} aria-label="Graph zoom and pan controls" />
-        <MiniMap
-          pannable
-          zoomable
-          maskColor="rgba(11, 13, 16, 0.7)"
-          nodeColor="#262b3a"
-          className="!bg-surface !border !border-border"
-          ariaLabel="Graph overview minimap"
+        <Controls
+          showInteractive={false}
+          aria-label="Graph zoom and pan controls"
+          className={isMobile ? '[&>button]:h-11 [&>button]:w-11' : undefined}
         />
+        {!isMobile && (
+          <MiniMap
+            pannable
+            zoomable
+            maskColor="rgba(11, 13, 16, 0.7)"
+            nodeColor="#262b3a"
+            className="!bg-surface !border !border-border"
+            ariaLabel="Graph overview minimap"
+          />
+        )}
       </ReactFlow>
 
-      {hoveredNode && hoveredRelationships && (
+      {!isMobile && hoveredNode && hoveredRelationships && (
         <NodeHoverTooltip node={hoveredNode} relationships={hoveredRelationships} />
       )}
     </div>
